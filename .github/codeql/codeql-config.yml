@@ -1,0 +1,10 @@
+name: "SUPER NOVUS CodeQL config"
+
+# The production app bundles `three` via npm/Vite (no CDN, no runtime remote
+# scripts). `reference/` is the vendored, validated reference build — a
+# standalone HTML file kept verbatim for parity and never served in
+# production; `dist/` is generated build output. CodeQL scans the real
+# first-party source (src/, test/) and skips those two.
+paths-ignore:
+  - reference
+  - dist
