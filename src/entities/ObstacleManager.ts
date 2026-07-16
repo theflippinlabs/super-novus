@@ -5,6 +5,13 @@ import { rand, clamp, reduceMotion } from "../core/util";
 import { CFG } from "../core/legacyCfg";
 import { TEX, PlanetFactory, canvasTex, glowTex } from "../core/textures";
 
+/* Gameplay randomness (positions, sizes, velocities, variants) flows through
+   the seeded RNG when one is provided, so a fixed seed replays identically.
+   Purely-visual randomness (rotation, panel angles, textures) stays on
+   Math.random() and must never touch the seeded stream. */
+const rr = (rng: any, a: number, b: number): number => (rng ? rng.range(a, b) : rand(a, b));
+const rn = (rng: any): number => (rng ? rng.next() : Math.random());
+
 export class ObstacleManager {
   [key: string]: any;
   constructor(scene, particles){
@@ -42,27 +49,27 @@ export class ObstacleManager {
     for (const s of this.rockSlots){ s.used = false; s.z = 1e9; }
   }
 
-  rock(z: number, cx: number | null = null, cy: number | null = null){
+  rock(z: number, cx: number | null = null, cy: number | null = null, rng: any = null){
     const slot = this.rockSlots.find(s => !s.used);
     if (!slot) return;
     slot.used = true;
-    slot.s = rand(1.2, 3.4);
-    slot.x = cx === null ? rand(-CFG.fieldX, CFG.fieldX) : clamp(cx + rand(-6,6), -CFG.fieldX, CFG.fieldX);
-    slot.y = cy === null ? rand(-CFG.fieldY, CFG.fieldY) : clamp(cy + rand(-5,5), -CFG.fieldY, CFG.fieldY);
-    slot.z = z + (cx === null ? 0 : rand(-4,4));
-    slot.rx = Math.random()*3; slot.ry = Math.random()*3;
-    slot.sx = rand(-1,1); slot.sy = rand(-1,1);
-    slot.vx = rand(-2.5,2.5); slot.vy = rand(-1.8,1.8);
+    slot.s = rr(rng, 1.2, 3.4);
+    slot.x = cx === null ? rr(rng, -CFG.fieldX, CFG.fieldX) : clamp(cx + rr(rng, -6,6), -CFG.fieldX, CFG.fieldX);
+    slot.y = cy === null ? rr(rng, -CFG.fieldY, CFG.fieldY) : clamp(cy + rr(rng, -5,5), -CFG.fieldY, CFG.fieldY);
+    slot.z = z + (cx === null ? 0 : rr(rng, -4,4));
+    slot.rx = Math.random()*3; slot.ry = Math.random()*3;   // visual spin only
+    slot.sx = rand(-1,1); slot.sy = rand(-1,1);              // visual spin only
+    slot.vx = rr(rng, -2.5,2.5); slot.vy = rr(rng, -1.8,1.8);
     this.list.push({kind:"rock", slot, r:slot.s*0.8,
       get x(){return this.slot.x}, get y(){return this.slot.y}, get z(){return this.slot.z}});
   }
-  field(z){
-    const cx = rand(-CFG.fieldX*0.6, CFG.fieldX*0.6), cy = rand(-CFG.fieldY*0.6, CFG.fieldY*0.6);
-    const n = 3 + (Math.random()*4|0);
-    for (let i = 0; i < n; i++) this.rock(z, cx, cy);
+  field(z, rng: any = null){
+    const cx = rr(rng, -CFG.fieldX*0.6, CFG.fieldX*0.6), cy = rr(rng, -CFG.fieldY*0.6, CFG.fieldY*0.6);
+    const n = 3 + (rn(rng)*4|0);
+    for (let i = 0; i < n; i++) this.rock(z, cx, cy, rng);
   }
-  planet(z, moon = false){
-    const r = moon ? rand(2.2, 3.6) : rand(4.5, 9);
+  planet(z, moon = false, rng: any = null){
+    const r = moon ? rr(rng, 2.2, 3.6) : rr(rng, 4.5, 9);
     let group, body;
     if (moon){
       group = new THREE.Group();
@@ -74,20 +81,20 @@ export class ObstacleManager {
       const built = PlanetFactory.build(PlanetFactory.randomType(), r);
       group = built.group; body = built.body;
     }
-    group.position.set(rand(-CFG.fieldX, CFG.fieldX), rand(-CFG.fieldY, CFG.fieldY), z);
+    group.position.set(rr(rng, -CFG.fieldX, CFG.fieldX), rr(rng, -CFG.fieldY, CFG.fieldY), z);
     this.scene.add(group);
     this.list.push({kind: moon ? "moon" : "planet", mesh:group, body, r:r*0.92, spin:rand(0.04,0.14),
       gravity: !moon, gravR: r*4.5});
   }
-  comet(z){
-    const big = Math.random() < 0.18;                       /* comète spectaculaire */
+  comet(z, rng: any = null){
+    const big = rn(rng) < 0.18;                             /* comète spectaculaire */
     const scale = big ? 1.7 : 1;
     const g = new THREE.Group();
     const glow = new THREE.Sprite(new THREE.SpriteMaterial({map:TEX.blue, transparent:true, opacity:big?1:.9, depthWrite:false, blending:THREE.AdditiveBlending}));
     glow.scale.setScalar(5.5*scale);
     g.add(glow);
     g.add(new THREE.Mesh(new THREE.SphereGeometry(0.8*scale, 14, 10), new THREE.MeshBasicMaterial({color:0xEAF6FF})));
-    const fromLeft = Math.random() < .5;
+    const fromLeft = rn(rng) < .5;
     const tailLen = big ? 22 : 13;
     const tail = new THREE.Mesh(new THREE.ConeGeometry(0.65*scale, tailLen, 10, 1, true),
       new THREE.MeshBasicMaterial({color:0x8FC6FF, transparent:true, opacity:big?.4:.32, blending:THREE.AdditiveBlending, depthWrite:false, side:THREE.DoubleSide}));
@@ -100,11 +107,11 @@ export class ObstacleManager {
     tail2.rotation.z = (fromLeft ? -Math.PI/2 : Math.PI/2) + (fromLeft ? -0.18 : 0.18);
     tail2.position.set((fromLeft ? -1 : 1) * tailLen*0.45, tailLen*0.09, 0);
     g.add(tail2);
-    g.position.set(fromLeft ? -CFG.fieldX-18 : CFG.fieldX+18, rand(-CFG.fieldY, CFG.fieldY), z);
+    g.position.set(fromLeft ? -CFG.fieldX-18 : CFG.fieldX+18, rr(rng, -CFG.fieldY, CFG.fieldY), z);
     this.scene.add(g);
-    this.list.push({kind:"comet", mesh:g, r:1.4*scale, vx:(fromLeft?1:-1)*rand(16,26)*(big?0.85:1), vy:rand(-3,3), sparkle:big});
+    this.list.push({kind:"comet", mesh:g, r:1.4*scale, vx:(fromLeft?1:-1)*rr(rng, 16,26)*(big?0.85:1), vy:rr(rng, -3,3), sparkle:big});
   }
-  debris(z){
+  debris(z, rng: any = null){
     const g = new THREE.Group();
     const mat = new THREE.MeshStandardMaterial({color:0x8a90a8, roughness:.5, metalness:.8, emissive:0x0a0c18, emissiveIntensity:.5});
     g.add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 2.2), mat));
@@ -114,12 +121,12 @@ export class ObstacleManager {
     const p2 = p1.clone();
     p2.position.x = -2.1; p2.rotation.z = rand(-0.2, 0.6);
     g.add(p1, p2);
-    g.position.set(rand(-CFG.fieldX, CFG.fieldX), rand(-CFG.fieldY, CFG.fieldY), z);
-    g.rotation.set(Math.random()*3, Math.random()*3, Math.random()*3);
+    g.position.set(rr(rng, -CFG.fieldX, CFG.fieldX), rr(rng, -CFG.fieldY, CFG.fieldY), z);
+    g.rotation.set(Math.random()*3, Math.random()*3, Math.random()*3);   // visual only
     this.scene.add(g);
-    this.list.push({kind:"debris", mesh:g, r:1.8, spin:rand(0.8, 2.0), vx:rand(-1.5,1.5), vy:rand(-1,1)});
+    this.list.push({kind:"debris", mesh:g, r:1.8, spin:rand(0.8, 2.0), vx:rr(rng, -1.5,1.5), vy:rr(rng, -1,1)});
   }
-  blackHole(z){
+  blackHole(z, rng: any = null){
     const g = new THREE.Group();
     g.add(new THREE.Mesh(new THREE.SphereGeometry(2.4, 24, 18), new THREE.MeshBasicMaterial({color:0x000000})));
     const diskMat = new THREE.ShaderMaterial({
@@ -144,7 +151,7 @@ export class ObstacleManager {
     const disk = new THREE.Mesh(new THREE.RingGeometry(2.6, 6.4, 64, 4), diskMat);
     disk.rotation.x = Math.PI/2 + rand(-0.5, 0.5);
     g.add(disk);
-    g.position.set(rand(-CFG.fieldX*0.7, CFG.fieldX*0.7), rand(-CFG.fieldY*0.7, CFG.fieldY*0.7), z);
+    g.position.set(rr(rng, -CFG.fieldX*0.7, CFG.fieldX*0.7), rr(rng, -CFG.fieldY*0.7, CFG.fieldY*0.7), z);
     this.scene.add(g);
     this.list.push({kind:"blackhole", mesh:g, diskMat, r:2.6, pullR:26, pull:26});
   }

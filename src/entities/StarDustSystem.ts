@@ -17,10 +17,13 @@ export class StarDustSystem {
     for (const c of this.clusters) this.scene.remove(c.pts);
     this.clusters.length = 0;
   }
-  spawnChain(z){
-    const n = 4 + (Math.random()*4|0);
-    const x0 = rand(-CFG.fieldX*0.7, CFG.fieldX*0.7), y0 = rand(-CFG.fieldY*0.7, CFG.fieldY*0.7);
-    const dx = rand(-2.6, 2.6), dy = rand(-1.8, 1.8), curve = rand(-0.5, 0.5);
+  spawnChain(z, rng: any = null){
+    // Chain layout is gameplay (what the player can collect) → seeded RNG.
+    // The per-cluster point cloud in spawnCluster stays visual (Math.random).
+    const rr = (a, b) => (rng ? rng.range(a, b) : rand(a, b));
+    const n = 4 + ((rng ? rng.next() : Math.random())*4|0);
+    const x0 = rr(-CFG.fieldX*0.7, CFG.fieldX*0.7), y0 = rr(-CFG.fieldY*0.7, CFG.fieldY*0.7);
+    const dx = rr(-2.6, 2.6), dy = rr(-1.8, 1.8), curve = rr(-0.5, 0.5);
     for (let i = 0; i < n; i++){
       this.spawnCluster(
         clamp(x0 + dx*i + curve*i*i*0.4, -CFG.fieldX, CFG.fieldX),

@@ -12,6 +12,7 @@ import { ObstacleManager } from "../entities/ObstacleManager";
 import { StarDustSystem } from "../entities/StarDustSystem";
 import { Environment } from "../entities/Environment";
 import { CameraController } from "./CameraController";
+import { SpawnManager } from "./SpawnManager";
 import { UIManager } from "../ui/UIManager";
 import { WalletManager } from "../net/WalletManager";
 import { Leaderboard } from "../net/Leaderboard";
@@ -61,6 +62,8 @@ export class GameEngine {
     this.trail = new Trail(this.scene);
     this.obstacles = new ObstacleManager(this.scene, this.particles);
     this.stardust = new StarDustSystem(this.scene, this.particles, this.audio);
+    this.fixedSeed = this._parseSeed();      // ?seed=N pins a deterministic run
+    this.spawn = new SpawnManager({obstacles:this.obstacles, stardust:this.stardust}, this.fixedSeed ?? undefined);
     this.env = new Environment(this.scene);
     this.camCtl = new CameraController(this.camera);
     this.ui = new UIManager();
@@ -208,8 +211,9 @@ export class GameEngine {
     this.player.pos.set(0,0,0);
     this.player.invuln = 0;
     this.player.group.visible = true;
+    this._newSpawn();
     this.nextZ = -70;
-    for (let z = -70; z > -340; z -= 15) this._populate(z);
+    for (let z = -70; z > -340; z -= 15) this.spawn.populate(z, this.level);
     this.nextZ = -340;
     this.env.spawnDecor(-170); this.env.spawnDecor(-300);
     this.ui.setLives(this.lives, CFG.lives);
@@ -221,16 +225,19 @@ export class GameEngine {
     this.clock.getDelta();
   }
 
-  _populate(z){
-    const r = Math.random();
-    if (r < 0.11) this.obstacles.planet(z);
-    else if (r < 0.17) this.obstacles.planet(z, true);
-    else if (r < 0.32) this.obstacles.field(z);
-    else if (r < 0.68) this.obstacles.rock(z);
-    else if (r < 0.72) this.obstacles.debris(z);
-    if (this.level >= 2 && Math.random() < 0.05 + this.level*0.008) this.obstacles.comet(z - 7);
-    if (this.level >= 3 && Math.random() < 0.035) this.obstacles.blackHole(z - 10);
-    if (Math.random() < 0.22) this.stardust.spawnChain(z - 6);
+  /** Parse an optional fixed seed from ?seed=N (uint32); null = random each run. */
+  _parseSeed(){
+    const s = new URLSearchParams(location.search).get("seed");
+    if (s === null) return null;
+    const n = Number(s);
+    return Number.isFinite(n) ? (n >>> 0) : null;
+  }
+
+  /** Fresh spawn stream for a new run: reuse the fixed seed if pinned,
+      otherwise draw a new random seed so each run differs. */
+  _newSpawn(){
+    const seed = this.fixedSeed !== null ? this.fixedSeed : undefined;
+    this.spawn = new SpawnManager({obstacles:this.obstacles, stardust:this.stardust}, seed);
   }
 
   /** Calibrated speed multiplier for a level: table for 1..5, then
@@ -392,6 +399,7 @@ export class GameEngine {
       document.getElementById("finalDist")!.textContent = Math.floor(this.dist).toLocaleString("fr-FR") + " m";
       document.getElementById("finalDust")!.textContent = this.dust;
       document.getElementById("bestScore")!.textContent = "RECORD · " + this.best.toLocaleString("fr-FR");
+      document.getElementById("seedLine")!.textContent = "SEED · " + this.spawn.seed;
       const ss = this.ui.saveState;
       if (saved){ ss.textContent = "SCORE ENREGISTRÉ ✓"; ss.className = "ok"; }
       else if (this.leaderboard.available){ ss.textContent = "CONNECTE TON WALLET POUR ENREGISTRER TON SCORE"; ss.className = "no"; }
@@ -445,7 +453,7 @@ export class GameEngine {
       if (this.keys.ArrowDown || this.keys.s) this.player.pos.y -= kv;
 
       while (this.nextZ > this.player.pos.z - 360){
-        this._populate(this.nextZ);
+        this.spawn.populate(this.nextZ, this.level);
         this.nextZ -= this._spawnStep();
       }
 
