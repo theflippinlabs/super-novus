@@ -15,7 +15,12 @@ import { CameraController } from "./CameraController";
 import { UIManager } from "../ui/UIManager";
 import { WalletManager } from "../net/WalletManager";
 import { Leaderboard } from "../net/Leaderboard";
-import { STAR_DUST_ENERGY, STAR_ENERGY_MAX } from "../config";
+import {
+  STAR_DUST_ENERGY, STAR_ENERGY_MAX,
+  NOVA_RADIUS, NOVA_BLAST_FORWARD, NOVA_DAMAGE_SCORE,
+  FOV_NOVA_PUNCH, TONE_EXPOSURE, TONE_EXPOSURE_NOVA,
+  DOUBLE_TAP_DELAY, DOUBLE_TAP_MAX_DIST, TAP_MAX_MOVE,
+} from "../config";
 
 export class GameEngine {
   [key: string]: any;
@@ -61,6 +66,7 @@ export class GameEngine {
     this.lives = CFG.lives; this.level = 1;
     this.speed = CFG.baseSpeed;
     this.shake = 0; this.timeScale = 1; this.slowmoT = 0;
+    this.fovPunch = 0;
     this.nextZ = -70; this.levelT = 0;
     this.clock = new THREE.Clock();
     this.elapsed = 0;
@@ -94,26 +100,54 @@ export class GameEngine {
 
   _bindInput(){
     this.drag = null;
+    this._lastTap = null; // {x,y,time} of the previous stationary tap (Nova Blast)
     const el = this.renderer.domElement;
     el.addEventListener("pointerdown", e => {
       this.audio.init();
       if (!this.running || this.paused) return;
-      this.drag = {sx:e.clientX, sy:e.clientY, px:this.player.pos.x, py:this.player.pos.y};
+      // Track this pointer's origin + max drift so pointerup can tell a tap
+      // (near-stationary) from a drag. Nova detection lives ONLY on pointerup;
+      // it never blocks or delays the direct-position drag below.
+      this.drag = {sx:e.clientX, sy:e.clientY, px:this.player.pos.x, py:this.player.pos.y,
+        dx:e.clientX, dy:e.clientY, moved:0};
     });
     addEventListener("pointermove", e => {
       if (!this.drag || !this.running || this.paused) return;
+      this.drag.moved = Math.max(this.drag.moved, Math.hypot(e.clientX - this.drag.dx, e.clientY - this.drag.dy));
       const kx = (CFG.fieldX*2) / (innerWidth*0.62);
       const ky = (CFG.fieldY*2) / (innerHeight*0.55);
       this.player.pos.x = clamp(this.drag.px + (e.clientX - this.drag.sx)*kx, -CFG.fieldX+1.2, CFG.fieldX-1.2);
       this.player.pos.y = clamp(this.drag.py - (e.clientY - this.drag.sy)*ky, -CFG.fieldY+1.2, CFG.fieldY-1.2);
     });
-    const end = () => this.drag = null;
-    addEventListener("pointerup", end);
-    addEventListener("pointercancel", end);
+    addEventListener("pointerup", e => {
+      const d = this.drag;
+      this.drag = null;
+      if (!d) return;
+      // A tap must have barely moved; a drag can never fire Nova.
+      if (d.moved >= TAP_MAX_MOVE){ this._lastTap = null; return; }
+      const now = performance.now();
+      const prev = this._lastTap;
+      if (prev && (now - prev.time) < DOUBLE_TAP_DELAY &&
+          Math.hypot(e.clientX - prev.x, e.clientY - prev.y) < DOUBLE_TAP_MAX_DIST){
+        this._lastTap = null;
+        this._tryNova();
+      } else {
+        this._lastTap = {x:e.clientX, y:e.clientY, time:now};
+      }
+    });
+    addEventListener("pointercancel", () => { this.drag = null; this._lastTap = null; });
 
     this.keys = {};
-    addEventListener("keydown", e => this.keys[e.key] = true);
+    addEventListener("keydown", e => {
+      if (e.key === " " || e.code === "Space"){ e.preventDefault(); this._tryNova(); }
+      this.keys[e.key] = true;
+    });
     addEventListener("keyup", e => this.keys[e.key] = false);
+  }
+
+  /** Gate: only fire Nova when fully charged and actively playing. */
+  _tryNova(){
+    if (this.charged && this.running && !this.paused) this.novaBlast();
   }
 
   _bindUI(){
@@ -163,6 +197,9 @@ export class GameEngine {
     this.lives = CFG.lives; this.level = 1; this.levelT = 0;
     this.speed = CFG.baseSpeed;
     this.shake = 0; this.timeScale = 1; this.slowmoT = 0;
+    this.fovPunch = 0;
+    this._clearNovaFx();
+    this.renderer.toneMappingExposure = TONE_EXPOSURE;
     this.player.pos.set(0,0,0);
     this.player.invuln = 0;
     this.player.group.visible = true;
@@ -204,6 +241,71 @@ export class GameEngine {
         this.ui.setNovaReady(true);
       }
     }
+  }
+
+  /** NOVA BLAST — consume full STAR ENERGY, clear nearby threats, big FX. */
+  novaBlast(){
+    if (!this.charged || !this.running || this.paused) return;
+    this.energy = 0; this.charged = false;
+    this.player.setCharged(false);
+    this.ui.setEnergy(0); this.ui.setNovaReady(false);
+
+    const p = this.player.pos.clone();
+    this.ui.flashNova(); // white-gold full-screen flash ~400ms
+
+    // Shockwave ring — additive torus, scale 1 → ~90.
+    const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.5, 12, 64),
+      new THREE.MeshBasicMaterial({color:0xFFE9B0, transparent:true, opacity:1, blending:THREE.AdditiveBlending, depthWrite:false}));
+    ring.position.copy(p);
+    this.scene.add(ring);
+    this._novaRing = {mesh:ring, t:0};
+
+    // Expansion sphere — additive, grows to the blast radius.
+    const sph = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20),
+      new THREE.MeshBasicMaterial({color:0xFFCF80, transparent:true, opacity:0.5, blending:THREE.AdditiveBlending, depthWrite:false}));
+    sph.position.copy(p);
+    this.scene.add(sph);
+    this._novaSphere = {mesh:sph, t:0};
+
+    // Exposure boost 1.15 → 1.6 → 1.15 over 600ms.
+    this._novaExpoT = 0;
+    // FOV punch +10 with elastic return + camera shake.
+    this.fovPunch = FOV_NOVA_PUNCH;
+    this._fovPunchT = 0;
+    this.shake = Math.max(this.shake, 1.2);
+
+    // 80+ golden particles through the existing pool.
+    this.particles.burst(p, 90, 42, 3, 0xffe0a0, 1);
+    this.particles.burst(p, 44, 26, 1.8, 0xffffff, 1);
+    this.audio.boom(true);
+    if (navigator.vibrate) navigator.vibrate([40, 20, 60]);
+
+    this._novaDestroy(p);
+  }
+
+  /** Destroy asteroids, comets and debris inside the blast zone (planets,
+      moons and black holes survive). Zone: radial <= NOVA_RADIUS,
+      -NOVA_RADIUS <= dz <= NOVA_BLAST_FORWARD, dz = obj.z - player.z. */
+  _novaDestroy(p){
+    for (let i = this.obstacles.list.length - 1; i >= 0; i--){
+      const o = this.obstacles.list[i];
+      if (o.kind !== "rock" && o.kind !== "comet" && o.kind !== "debris") continue;
+      const ox = o.mesh ? o.mesh.position.x : o.x;
+      const oy = o.mesh ? o.mesh.position.y : o.y;
+      const oz = o.mesh ? o.mesh.position.z : o.z;
+      const radial = Math.hypot(ox - p.x, oy - p.y);
+      const dz = oz - p.z;
+      if (radial <= NOVA_RADIUS && dz <= NOVA_BLAST_FORWARD && dz >= -NOVA_RADIUS){
+        this.obstacles.removeAndExplode(i, this.particles);
+        this.score += NOVA_DAMAGE_SCORE;
+      }
+    }
+  }
+
+  _clearNovaFx(){
+    if (this._novaRing){ this.scene.remove(this._novaRing.mesh); this._novaRing = null; }
+    if (this._novaSphere){ this.scene.remove(this._novaSphere.mesh); this._novaSphere = null; }
+    this._novaExpoT = null;
   }
 
   onGraze(pos){
@@ -334,6 +436,39 @@ export class GameEngine {
       r.mesh.scale.set(s, s, s*0.3);
       r.mesh.material.opacity = Math.max(0, 1 - r.t*1.2);
       if (r.t > 1){ this.scene.remove(r.mesh); this._deathRing = null; }
+    }
+
+    // Nova Blast transient FX
+    if (this._novaRing){
+      const r = this._novaRing;
+      r.t += dt;
+      const s = 1 + r.t*90;
+      r.mesh.scale.set(s, s, s);
+      r.mesh.material.opacity = Math.max(0, 1 - r.t*1.3);
+      if (r.t > 0.9){ this.scene.remove(r.mesh); this._novaRing = null; }
+    }
+    if (this._novaSphere){
+      const r = this._novaSphere;
+      r.t += dt;
+      const s = Math.min(NOVA_RADIUS, 1 + r.t*(NOVA_RADIUS - 1)/0.4);
+      r.mesh.scale.setScalar(s);
+      r.mesh.material.opacity = Math.max(0, 0.5*(1 - r.t/0.5));
+      if (r.t > 0.55){ this.scene.remove(r.mesh); this._novaSphere = null; }
+    }
+    if (this._novaExpoT !== null && this._novaExpoT !== undefined){
+      this._novaExpoT += dt;
+      const q = this._novaExpoT / 0.6;
+      if (q >= 1){ this.renderer.toneMappingExposure = TONE_EXPOSURE; this._novaExpoT = null; }
+      else {
+        const tri = 1 - Math.abs(q*2 - 1); // 0 → 1 → 0
+        this.renderer.toneMappingExposure = TONE_EXPOSURE + (TONE_EXPOSURE_NOVA - TONE_EXPOSURE)*tri;
+      }
+    }
+    if (this.fovPunch){
+      this._fovPunchT += dt;
+      // Elastic settle back to 0: decaying cosine.
+      this.fovPunch = FOV_NOVA_PUNCH * Math.exp(-6*this._fovPunchT) * Math.cos(this._fovPunchT*14);
+      if (this._fovPunchT > 0.9) this.fovPunch = 0;
     }
 
     this.trail.update(this.player.pos);

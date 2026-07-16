@@ -6,7 +6,7 @@ import { CFG } from "./legacyCfg";
 
 export class CameraController {
   [key: string]: any;
-  constructor(camera){ this.cam = camera; }
+  constructor(camera){ this.cam = camera; this.baseFov = 84; }
   update(dt, player, speed, game){
     const cf = 1 - Math.exp(-13*dt);
     const camX = player.pos.x*0.55;
@@ -22,7 +22,11 @@ export class CameraController {
     }
     this.cam.lookAt(player.pos.x*0.92, player.pos.y*0.92, player.pos.z - 22);
     const wantFov = 84 + (speed - CFG.baseSpeed)*0.15;
-    this.cam.fov += (wantFov - this.cam.fov)*cf;
+    // Smooth the speed-driven FOV, then add the transient Nova Blast punch on
+    // top so the punch never persists in the camera's own state. With no punch
+    // (fovPunch = 0) this is identical to the validated single-lerp behaviour.
+    this.baseFov += (wantFov - this.baseFov)*cf;
+    this.cam.fov = this.baseFov + (game.fovPunch || 0);
     this.cam.updateProjectionMatrix();
     if (!reduceMotion && speed > 90 && game.running){
       this.cam.position.x += (Math.random()-0.5)*0.035;
