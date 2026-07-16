@@ -20,7 +20,12 @@ import {
   NOVA_RADIUS, NOVA_BLAST_FORWARD, NOVA_DAMAGE_SCORE,
   FOV_NOVA_PUNCH, TONE_EXPOSURE, TONE_EXPOSURE_NOVA,
   DOUBLE_TAP_DELAY, DOUBLE_TAP_MAX_DIST, TAP_MAX_MOVE,
+  BASE_SPEED, MAX_SPEED, LEVEL_DURATION,
+  SPEED_MULTIPLIERS, SPEED_MULT_STEP, SPEED_MULT_CAP,
+  OBSTACLE_DENSITIES, DENSITY_STEP, DENSITY_CAP,
 } from "../config";
+
+const SPAWN_STEP_BASE = 14; // reference band spacing at level-1 density
 
 export class GameEngine {
   [key: string]: any;
@@ -228,6 +233,28 @@ export class GameEngine {
     if (Math.random() < 0.22) this.stardust.spawnChain(z - 6);
   }
 
+  /** Calibrated speed multiplier for a level: table for 1..5, then
+      +SPEED_MULT_STEP per level, capped at SPEED_MULT_CAP. */
+  _speedMult(level){
+    if (level <= SPEED_MULTIPLIERS.length) return SPEED_MULTIPLIERS[level-1];
+    return Math.min(SPEED_MULT_CAP,
+      SPEED_MULTIPLIERS[SPEED_MULTIPLIERS.length-1] + (level - SPEED_MULTIPLIERS.length)*SPEED_MULT_STEP);
+  }
+
+  /** Calibrated obstacle density: table for 1..5, then +DENSITY_STEP per
+      level, capped at DENSITY_CAP. */
+  _density(level){
+    if (level <= OBSTACLE_DENSITIES.length) return OBSTACLE_DENSITIES[level-1];
+    return Math.min(DENSITY_CAP,
+      OBSTACLE_DENSITIES[OBSTACLE_DENSITIES.length-1] + (level - OBSTACLE_DENSITIES.length)*DENSITY_STEP);
+  }
+
+  /** Spawn band spacing from density: baseline at L1, tighter as density
+      rises. At L1 (density 5) this equals the reference's 14-unit step. */
+  _spawnStep(){
+    return Math.max(4, SPAWN_STEP_BASE * OBSTACLE_DENSITIES[0] / this._density(this.level));
+  }
+
   collectDust(){
     this.dust++;
     this.score += 100;
@@ -400,7 +427,13 @@ export class GameEngine {
         this.level++;
         this.ui.showToast("NIVEAU " + this.level + " — VITESSE ++");
       }
-      this.speed = Math.min(CFG.maxSpeed, CFG.baseSpeed + (this.level-1)*9 + this.levelT*0.25);
+      // Calibrated progression: interpolate smoothly between this level's and
+      // the next level's speed multiplier across the level's duration. Base
+      // speed and the 30s tier are unchanged (L1 t=0 => BASE_SPEED exactly).
+      const m0 = this._speedMult(this.level);
+      const m1 = this._speedMult(this.level + 1);
+      const frac = clamp(this.levelT / LEVEL_DURATION, 0, 1);
+      this.speed = Math.min(MAX_SPEED, BASE_SPEED * (m0 + (m1 - m0)*frac));
       this.dist += this.speed*dt;
       this.score += this.speed*dt*1.5;
       this.player.pos.z -= this.speed*dt;
@@ -413,7 +446,7 @@ export class GameEngine {
 
       while (this.nextZ > this.player.pos.z - 360){
         this._populate(this.nextZ);
-        this.nextZ -= 14;
+        this.nextZ -= this._spawnStep();
       }
 
       this.obstacles.update(dt, t, this.player, this);
