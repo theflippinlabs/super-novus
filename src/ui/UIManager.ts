@@ -16,6 +16,9 @@ export class UIManager {
   distV = $("distV");
   dustV = $("dustV");
   lives = $("livesDots");
+  energyWrap = $("energyWrap");
+  energyFill = $("energyFill");
+  novaFlash = $("novaFlash");
   pauseBtn = $("pauseBtn") as HTMLButtonElement;
   toast = $("levelToast");
   whiteout = $("whiteout");
@@ -38,6 +41,26 @@ export class UIManager {
     this.scoreV.textContent = Math.floor(score).toLocaleString("fr-FR");
     this.distV.textContent = Math.floor(dist).toLocaleString("fr-FR");
     this.dustV.textContent = String(dust);
+  }
+
+  /** STAR ENERGY gauge fill, 0..1. */
+  setEnergy(value01: number): void {
+    this.energyFill.style.width = `${Math.round(Math.max(0, Math.min(1, value01)) * 100)}%`;
+  }
+
+  /** Toggle the "full" state: blinking bar + Nova Blast hint. */
+  setNovaReady(ready: boolean): void {
+    this.energyWrap.classList.toggle("full", ready);
+  }
+
+  /** White-gold full-screen flash for Nova Blast (~400ms). */
+  flashNova(): void {
+    this.novaFlash.style.transition = "none";
+    this.novaFlash.style.opacity = "1";
+    requestAnimationFrame(() => {
+      this.novaFlash.style.transition = "opacity .4s ease-out";
+      this.novaFlash.style.opacity = "0";
+    });
   }
 
   setLives(n: number, max: number): void {

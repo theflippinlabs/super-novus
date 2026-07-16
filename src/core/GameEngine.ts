@@ -15,6 +15,7 @@ import { CameraController } from "./CameraController";
 import { UIManager } from "../ui/UIManager";
 import { WalletManager } from "../net/WalletManager";
 import { Leaderboard } from "../net/Leaderboard";
+import { STAR_DUST_ENERGY, STAR_ENERGY_MAX } from "../config";
 
 export class GameEngine {
   [key: string]: any;
@@ -56,6 +57,7 @@ export class GameEngine {
 
     this.running = false; this.paused = false;
     this.score = 0; this.dist = 0; this.dust = 0; this.best = 0;
+    this.energy = 0; this.charged = false;
     this.lives = CFG.lives; this.level = 1;
     this.speed = CFG.baseSpeed;
     this.shake = 0; this.timeScale = 1; this.slowmoT = 0;
@@ -155,6 +157,9 @@ export class GameEngine {
     this.env.clearDecor();
     this.trail.reset();
     this.score = 0; this.dist = 0; this.dust = 0;
+    this.energy = 0; this.charged = false;
+    this.player.setCharged(false);
+    this.ui.setEnergy(0); this.ui.setNovaReady(false);
     this.lives = CFG.lives; this.level = 1; this.levelT = 0;
     this.speed = CFG.baseSpeed;
     this.shake = 0; this.timeScale = 1; this.slowmoT = 0;
@@ -189,6 +194,16 @@ export class GameEngine {
   collectDust(){
     this.dust++;
     this.score += 100;
+    // STAR ENERGY charges only from dust; fills at ~12 clusters.
+    if (this.energy < STAR_ENERGY_MAX){
+      this.energy = Math.min(STAR_ENERGY_MAX, this.energy + STAR_DUST_ENERGY);
+      this.ui.setEnergy(this.energy / STAR_ENERGY_MAX);
+      if (this.energy >= STAR_ENERGY_MAX && !this.charged){
+        this.charged = true;
+        this.player.setCharged(true); // brighten only — never touches the core shader
+        this.ui.setNovaReady(true);
+      }
+    }
   }
 
   onGraze(pos){
