@@ -76,6 +76,27 @@ export class AudioManager {
     };
     playChord();
   }
+  /** Suspend the generative-music scheduler (used on pause and tab-hide).
+      Already-scheduled notes ring out on the audio timeline; no new chords
+      are queued until startMusic() runs again. */
+  stopMusic(){
+    if (this._musicTimer){ clearTimeout(this._musicTimer); this._musicTimer = null; }
+    this.musicOn = false;
+  }
+  /** Tab hidden: pause the AudioContext clock and the music scheduler.
+      Never recreates the context. */
+  suspendContext(){
+    if (!this.ctx) return;
+    this.stopMusic();
+    this.ctx.suspend();
+  }
+  /** Tab visible again: resume the same AudioContext and, if requested,
+      relaunch the music loop. */
+  resumeContext(restartMusic){
+    if (!this.ctx) return;
+    this.ctx.resume();
+    if (restartMusic) this.startMusic();
+  }
   ping(){
     if (!this.ctx) return;
     const t = this.ctx.currentTime;

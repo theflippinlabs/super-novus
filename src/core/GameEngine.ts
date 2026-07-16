@@ -90,6 +90,16 @@ export class GameEngine {
       this.camera.updateProjectionMatrix();
       this.renderer.setSize(innerWidth, innerHeight);
     });
+
+    // Tab visibility: suspend/resume the shared AudioContext (never recreate).
+    document.addEventListener("visibilitychange", () => {
+      if (document.hidden){
+        this.audio.suspendContext();
+      } else {
+        this.audio.resumeContext(!this.paused); // don't relaunch music while paused
+        this.clock.getDelta();                  // avoid a dt jump on return
+      }
+    });
   }
 
   async _initAuth(){
@@ -165,12 +175,14 @@ export class GameEngine {
       if (!this.running) return;
       this.paused = true;
       this.ui.pauseScreen.style.display = "flex";
-      this.audio.setHum(0, false);
+      this.audio.setHum(0, false);   // cut the speed hum
+      this.audio.stopMusic();        // suspend the generative-music timer
     });
     document.getElementById("resumeBtn")!.addEventListener("click", () => {
       this.paused = false;
       this.ui.pauseScreen.style.display = "none";
-      this.clock.getDelta();
+      this.audio.startMusic();       // relaunch the music loop
+      this.clock.getDelta();         // resync so dt doesn't jump on resume
     });
     this.ui.walletBtn.addEventListener("click", async () => {
       this.ui.walletBtn.disabled = true;
