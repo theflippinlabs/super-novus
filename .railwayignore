@@ -1,0 +1,5 @@
+# Files not needed to build or serve the app on Railway.
+reference/
+test/
+.github/
+*.log
