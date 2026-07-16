@@ -68,8 +68,9 @@ export class GameEngine {
     this.env = new Environment(this.scene);
     this.camCtl = new CameraController(this.camera);
     this.ui = new UIManager();
-    // Zero cost unless ?debug=1: no DOM, no measurement otherwise.
+    // Zero cost unless ?debug=1: no DOM, no measurement, no global otherwise.
     this.debug = new URLSearchParams(location.search).get("debug") === "1" ? new DebugOverlay() : null;
+    if (this.debug) (window as any).__game = this; // debug-only inspection handle
 
     this.running = false; this.paused = false;
     this.score = 0; this.dist = 0; this.dust = 0; this.best = 0;
