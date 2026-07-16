@@ -19,8 +19,9 @@ to those dashboards. That is a hard limitation, not a choice.
 ## 1. Local sanity check
 ```bash
 npm install
-npm run typecheck        # currently green for ported core; finish remaining modules first
-npm run dev              # http://localhost:5173  → guest mode must launch
+npm run typecheck        # green
+npm run build            # green — production bundle
+npm run dev              # http://localhost:5173  → guest mode launches instantly
 ```
 
 ## 2. GitHub
@@ -76,9 +77,11 @@ Wait for propagation; Vercel issues the TLS cert automatically.
 
 ---
 
-## What is NOT done yet (honest status)
-The validated game core has been ported and typechecks, but the full spec
-(9 split entity systems, NovaBlast, WalletManager, Leaderboard client, HUD,
-Screens, GameEngine mediator) is **not fully implemented in this snapshot**.
-See `STATUS.md` for the exact file-by-file state. Do not treat this as a
-finished production build.
+## Status (honest)
+The validated game core is ported (byte-identical feel) and all Phase 1
+gameplay features are implemented and verified in a headless Chromium run:
+STAR ENERGY, Nova Blast, calibrated progression, seeded SpawnManager, strict
+pause, audio visibility handling, and the `?debug=1` overlay. `npm run
+typecheck` and `npm run build` are both green. See `STATUS.md` for the exact
+file-by-file state. The only remaining work is the credential-gated infra in
+sections 3–6 above (Vercel, Supabase, WalletConnect, DNS) — no code work.
