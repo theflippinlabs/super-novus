@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>SUPER NOVUS — Novarys</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%23F5C542'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23FFF0C0'/%3E%3C/svg%3E">
+<meta name="theme-color" content="#030312">
+<meta name="description" content="SUPER NOVUS — a Novarys cosmic arcade experience.">
+<meta name="color-scheme" content="dark">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SUPER NOVUS">
+<meta property="og:title" content="SUPER NOVUS">
+<meta property="og:description" content="Traverse la galaxie — Novarys cosmic arcade.">
+<meta property="og:type" content="website">
+<style>
+  :root{ --gold:#F5C542; --dim:#8b93b8; }
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{width:100%;height:100%;overflow:hidden;background:#030312;
+    font-family:-apple-system,"SF Pro Display","Segoe UI",Roboto,sans-serif;color:#fff;
+    touch-action:none;user-select:none;-webkit-user-select:none;position:fixed;inset:0}
+  canvas{display:block}
+
+  /* ===== HUD minimaliste ===== */
+  #hud{position:fixed;inset:0;pointer-events:none;display:none;z-index:5}
+  #topRow{position:fixed;top:calc(10px + env(safe-area-inset-top));left:0;right:0;
+    display:flex;justify-content:center;gap:34px;align-items:baseline}
+  .stat{text-align:center}
+  .stat .v{font-size:22px;font-weight:800;letter-spacing:.5px;font-variant-numeric:tabular-nums;
+    text-shadow:0 0 16px rgba(245,197,66,.55), 0 1px 3px rgba(0,0,0,.8)}
+  .stat .l{font-size:8px;letter-spacing:2.5px;color:var(--dim);font-weight:600;margin-top:1px}
+  .stat.star .v{color:var(--gold)}
+  .stat.star .v::before{content:"★ ";font-size:16px}
+  #livesDots{position:fixed;top:calc(64px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
+    font-size:12px;letter-spacing:6px;color:var(--gold);text-shadow:0 0 8px rgba(245,197,66,.8)}
+  #livesDots .lost{color:rgba(255,255,255,.14);text-shadow:none}
+
+  /* ===== STAR ENERGY ===== */
+  #energyWrap{position:fixed;top:calc(88px + env(safe-area-inset-top));left:50%;transform:translateX(-50%);
+    width:min(58vw,300px);text-align:center;pointer-events:none}
+  #energyBar{width:100%;height:4px;border-radius:3px;background:rgba(245,197,66,.12);
+    overflow:hidden;box-shadow:inset 0 0 6px rgba(0,0,0,.5)}
+  #energyFill{height:100%;width:0%;border-radius:3px;
+    background:linear-gradient(90deg,#D89B1E,var(--gold) 55%,#FFEDB0);
+    box-shadow:0 0 10px rgba(245,197,66,.7);transition:width .18s ease-out}
+  #energyHint{margin-top:5px;font-size:8.5px;letter-spacing:3px;color:var(--gold);font-weight:800;
+    opacity:0;transition:opacity .3s;text-shadow:0 0 10px rgba(245,197,66,.85)}
+  #energyWrap.full #energyFill{animation:energyPulse .5s ease-in-out infinite}
+  #energyWrap.full #energyHint{opacity:1;animation:pulse 1.4s ease-in-out infinite}
+  @keyframes energyPulse{0%,100%{opacity:1;box-shadow:0 0 10px rgba(245,197,66,.7)}
+    50%{opacity:.5;box-shadow:0 0 22px rgba(245,197,66,1)}}
+  @media (prefers-reduced-motion: reduce){#energyWrap.full #energyFill,#energyWrap.full #energyHint{animation:none}}
+  #pauseBtn{position:fixed;top:calc(8px + env(safe-area-inset-top));right:12px;width:44px;height:44px;
+    background:rgba(10,12,32,.45);border:1px solid rgba(255,255,255,.18);border-radius:12px;
+    color:#fff;font-size:14px;display:none;align-items:center;justify-content:center;z-index:7;
+    pointer-events:auto;font-family:inherit;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  #levelToast{position:fixed;top:26%;left:50%;transform:translateX(-50%);font-size:13px;font-weight:800;
+    letter-spacing:6px;color:#fff;text-shadow:0 0 20px rgba(140,180,255,.9);opacity:0;transition:opacity .5s;z-index:6;white-space:nowrap}
+
+  /* ===== Écrans ===== */
+  .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% -20%, rgba(60,40,110,.32), rgba(3,3,18,.94) 62%);
+    z-index:10;text-align:center;padding:20px;overflow-y:auto}
+  .brand{font-size:10px;letter-spacing:9px;color:var(--dim);margin-bottom:12px;font-weight:600}
+  h1{font-size:clamp(42px,11vw,88px);font-weight:900;letter-spacing:.02em;font-style:italic;
+    background:linear-gradient(180deg,#fff 5%,#cfe0ff 30%,#6d9bea 58%,#2a4780 92%);
+    -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
+    filter:drop-shadow(0 4px 0 rgba(8,16,44,.95)) drop-shadow(0 0 34px rgba(255,150,50,.55));
+    transform:skewX(-5deg);margin-bottom:2px}
+  .sunline{width:min(64vw,320px);height:3px;margin:4px 0 20px;
+    background:radial-gradient(circle,#FFF0C0,rgba(255,122,47,.75) 40%,transparent 75%);
+    box-shadow:0 0 22px rgba(255,150,60,.9)}
+  .sub{font-size:11px;letter-spacing:5px;color:var(--dim);margin-bottom:20px;font-weight:600}
+  .rules{font-size:12px;line-height:1.9;color:#c8cfe8;margin-bottom:22px;max-width:340px}
+  .rules b{color:var(--gold)}
+  button.big{pointer-events:auto;font-family:inherit;font-size:15px;letter-spacing:5px;padding:16px 46px;
+    color:#050418;background:linear-gradient(180deg,#FFEDB0,var(--gold) 60%,#D89B1E);border:none;border-radius:14px;
+    cursor:pointer;font-weight:800;box-shadow:0 0 32px rgba(245,197,66,.55), 0 4px 0 rgba(120,80,10,.6);
+    transition:transform .12s}
+  button.big:active{transform:scale(.94) translateY(2px)}
+  #gameover,#pauseScreen{display:none}
+  #gameover h1{background:linear-gradient(180deg,#FFE3CE,#FF7A2F 55%,#8E3208);
+    -webkit-background-clip:text;background-clip:text}
+  .statLine{font-size:14px;color:#c8cfe8;margin:3px 0;font-variant-numeric:tabular-nums}
+  .statLine b{color:#fff;font-size:18px;font-weight:800}
+  .statLine.gold b{color:var(--gold)}
+  #bestScore{font-size:11px;letter-spacing:3px;color:var(--dim);margin:10px 0 4px}
+  #seedLine{font-size:9px;letter-spacing:2px;color:#4a5178;margin:0 0 12px;font-variant-numeric:tabular-nums}
+  .pulse{animation:pulse 2.6s ease-in-out infinite}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+  @media (prefers-reduced-motion: reduce){.pulse{animation:none}}
+
+  /* ===== Auth + Leaderboard ===== */
+  #authBox{margin:4px 0 20px;display:flex;flex-direction:column;align-items:center;gap:11px;min-height:60px}
+  #authRow{display:flex;gap:8px;align-items:center}
+  #pseudoInput{pointer-events:auto;touch-action:auto;font-family:inherit;font-size:13px;letter-spacing:2px;
+    padding:11px 14px;width:170px;text-align:center;color:#fff;font-weight:700;
+    background:rgba(10,14,36,.7);border:1px solid rgba(140,170,255,.35);border-radius:10px;outline:none;text-transform:uppercase}
+  #pseudoInput::placeholder{color:#5a6288;font-weight:600}
+  button.mini{pointer-events:auto;font-family:inherit;font-size:11px;letter-spacing:2px;padding:11px 16px;
+    color:#dfe6ff;background:rgba(30,40,80,.7);border:1px solid rgba(140,170,255,.4);border-radius:10px;
+    cursor:pointer;font-weight:700}
+  button.mini:active{transform:scale(.95)}
+  #loggedRow{display:none;flex-direction:row;gap:10px;align-items:center}
+  #loggedRow .who{font-size:12px;letter-spacing:2px;color:#bfe0a8;font-weight:700}
+  .authNote{font-size:9.5px;letter-spacing:1px;color:#5a6288}
+  #saveState{font-size:11px;letter-spacing:2px;margin:2px 0 10px;font-weight:700}
+  #saveState.ok{color:#9fdc8a}
+  #saveState.no{color:#8b93b8}
+
+  .lbPanel{width:min(84vw,320px);margin:4px 0 18px;background:rgba(8,12,30,.6);
+    border:1px solid rgba(140,170,255,.22);border-radius:14px;padding:12px 14px 10px}
+  .lbPanel h3{font-size:10px;letter-spacing:3px;color:var(--dim);font-weight:700;margin-bottom:8px}
+  .lbRow{display:flex;justify-content:space-between;align-items:baseline;padding:4px 2px;
+    font-size:12.5px;font-variant-numeric:tabular-nums;border-bottom:1px solid rgba(255,255,255,.05)}
+  .lbRow:last-child{border-bottom:none}
+  .lbRow .rank{color:var(--dim);width:26px;text-align:left;font-weight:700}
+  .lbRow .name{flex:1;text-align:left;letter-spacing:1px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lbRow .pts{color:var(--gold);font-weight:800;margin-left:10px}
+  .lbRow.me{background:rgba(245,197,66,.1);border-radius:6px}
+  .lbRow.me .name{color:var(--gold)}
+  .lbEmpty{font-size:11px;color:#5a6288;letter-spacing:1px;padding:6px 0}
+
+  #whiteout{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9}
+  #novaFlash{position:fixed;inset:0;opacity:0;pointer-events:none;z-index:9;
+    background:radial-gradient(ellipse at 50% 50%, rgba(255,246,222,.96), rgba(245,197,66,.6) 52%, rgba(245,197,66,0) 100%)}
+  #hitFlash{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(255,70,25,.5) 100%);
+    opacity:0;pointer-events:none;z-index:8}
+  #vignette{position:fixed;inset:0;pointer-events:none;z-index:4;
+    background:radial-gradient(ellipse at 50% 50%, transparent 64%, rgba(2,2,14,.55) 100%)}
+</style>
+</head>
+<body>
+
+<div id="vignette"></div>
+
+<div id="hud">
+  <div id="topRow">
+    <div class="stat"><div class="v" id="scoreV">0</div><div class="l">SCORE</div></div>
+    <div class="stat"><div class="v" id="distV">0</div><div class="l">DISTANCE</div></div>
+    <div class="stat star"><div class="v" id="dustV">0</div><div class="l">POUSSIÈRE</div></div>
+  </div>
+  <div id="livesDots">●●●</div>
+  <div id="energyWrap">
+    <div id="energyBar"><div id="energyFill"></div></div>
+    <div id="energyHint">DOUBLE-TAP — NOVA BLAST</div>
+  </div>
+  <div id="levelToast">VITESSE ++</div>
+</div>
+<button id="pauseBtn">❚❚</button>
+
+<div id="whiteout"></div>
+<div id="novaFlash"></div>
+<div id="hitFlash"></div>
+
+<div class="screen" id="menu">
+  <div class="brand">N O V A R Y S</div>
+  <h1>SUPER NOVUS</h1>
+  <div class="sunline"></div>
+  <div class="sub pulse">TRAVERSE LA GALAXIE</div>
+  <div class="rules">
+    Glisse ton doigt — l'étoile répond <b>instantanément</b>.<br>
+    Évite tout. Traverse la <b>poussière d'étoiles</b>.<br>
+    3 vies. La galaxie accélère toutes les 30 s.
+  </div>
+
+  <div id="authBox">
+    <button class="big" id="playBtn">CONTINUER EN INVITÉ</button>
+    <button class="mini" id="walletBtn">🔗 CONNECTER LE WALLET</button>
+    <div id="loggedRow">
+      <span class="who" id="whoTxt">CONNECTÉ</span>
+      <button class="mini" id="logoutBtn">DÉCONNEXION</button>
+    </div>
+    <div class="authNote" id="walletState"></div>
+  </div>
+
+  <div class="lbPanel" style="margin-top:22px">
+    <h3>CLASSEMENT GALACTIQUE</h3>
+    <div id="lbListMenu"><div class="lbEmpty">Chargement…</div></div>
+  </div>
+</div>
+
+<div class="screen" id="pauseScreen">
+  <div class="brand">N O V A R Y S</div>
+  <h1 style="font-size:clamp(32px,8vw,60px)">PAUSE</h1>
+  <div class="sunline"></div>
+  <button class="big" id="resumeBtn">REPRENDRE</button>
+</div>
+
+<div class="screen" id="gameover">
+  <div class="brand">N O V A R Y S</div>
+  <h1>EXTINCTION</h1>
+  <div class="sunline"></div>
+  <div class="statLine">SCORE <b id="finalScore">0</b></div>
+  <div class="statLine">DISTANCE <b id="finalDist">0</b></div>
+  <div class="statLine gold">POUSSIÈRE ★ <b id="finalDust">0</b></div>
+  <div id="bestScore">RECORD · 0</div>
+  <div id="seedLine">SEED · —</div>
+  <div id="saveState" class="no"></div>
+  <div id="lb2" class="" style="margin-bottom:18px">
+    <div class="lbPanel" style="margin:0">
+      <h3>CLASSEMENT GALACTIQUE</h3>
+      <div id="lbListOver"><div class="lbEmpty">—</div></div>
+    </div>
+  </div>
+  <button class="big" id="retryBtn">RENAÎTRE</button>
+</div>
+
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>
