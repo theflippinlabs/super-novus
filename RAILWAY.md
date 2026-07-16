@@ -8,9 +8,9 @@ is merged to `main`, you only need to connect the repo and click Deploy.
   start command, healthcheck on `/`, restart policy).
 - `nixpacks.toml` — pins Node 20 and the install → build → start pipeline.
 - `.node-version` — Node 20 (belt-and-suspenders with `engines` in package.json).
-- `server.js` — zero-dependency static server for the Vite build (`dist/`),
-  binds to `$PORT` on `0.0.0.0`, long-cache for hashed assets, no-cache HTML,
-  path-traversal guarded. Run via `npm start`.
+- `sirv` static serving — `npm start` runs `sirv dist --host 0.0.0.0 --port
+  $PORT --single --etag`, a small, well-audited static server (used by
+  Vite/SvelteKit) with SPA fallback and ETag revalidation, bound to `$PORT`.
 - `.railwayignore` — keeps the deploy context lean (excludes `reference/`,
   `test/`, `.github/`).
 

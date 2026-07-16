@@ -9,7 +9,7 @@
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "start": "node server.js"
+    "start": "sirv dist --host 0.0.0.0 --port ${PORT:-8080} --single --etag"
   },
   "engines": {
     "node": ">=20"
@@ -17,6 +17,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "@walletconnect/ethereum-provider": "^2.11.0",
+    "sirv-cli": "^3.0.1",
     "three": "0.128.0"
   },
   "devDependencies": {
