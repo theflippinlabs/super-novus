@@ -56,6 +56,12 @@ export class ParticleSystem {
       this.emit(pos, v, rand(.4,.9), size*rand(.6,1.4), color);
     }
   }
+  /** Live particle count (debug overlay only — not called in normal play). */
+  activeCount(){
+    let c = 0;
+    for (let i = 0; i < this.n; i++) if (this.data[i].life > 0) c++;
+    return c;
+  }
   update(dt){
     for (let i = 0; i < this.n; i++){
       const d = this.data[i];

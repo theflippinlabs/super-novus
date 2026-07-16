@@ -14,6 +14,7 @@ import { Environment } from "../entities/Environment";
 import { CameraController } from "./CameraController";
 import { SpawnManager } from "./SpawnManager";
 import { UIManager } from "../ui/UIManager";
+import { DebugOverlay } from "../ui/DebugOverlay";
 import { WalletManager } from "../net/WalletManager";
 import { Leaderboard } from "../net/Leaderboard";
 import {
@@ -67,6 +68,8 @@ export class GameEngine {
     this.env = new Environment(this.scene);
     this.camCtl = new CameraController(this.camera);
     this.ui = new UIManager();
+    // Zero cost unless ?debug=1: no DOM, no measurement otherwise.
+    this.debug = new URLSearchParams(location.search).get("debug") === "1" ? new DebugOverlay() : null;
 
     this.running = false; this.paused = false;
     this.score = 0; this.dist = 0; this.dust = 0; this.best = 0;
@@ -428,7 +431,7 @@ export class GameEngine {
   _loop(){
     requestAnimationFrame(this._loop);
     let dt = Math.min(this.clock.getDelta(), 0.05);
-    if (this.paused){ this.renderer.render(this.scene, this.camera); return; }
+    if (this.paused){ this.renderer.render(this.scene, this.camera); if (this.debug) this.debug.update(this); return; }
 
     if (this.slowmoT > 0){
       this.slowmoT -= dt;
@@ -530,5 +533,6 @@ export class GameEngine {
     this.camCtl.update(dt, this.player, this.speed, this);
 
     this.renderer.render(this.scene, this.camera);
+    if (this.debug) this.debug.update(this);
   }
 }
