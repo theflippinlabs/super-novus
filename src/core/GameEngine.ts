@@ -13,21 +13,19 @@ import { StarDustSystem } from "../entities/StarDustSystem";
 import { Environment } from "../entities/Environment";
 import { CameraController } from "./CameraController";
 import { SpawnManager } from "./SpawnManager";
+import { speedMult, density, spawnStep, speedAt } from "./progression";
+import { isInNovaZone } from "../fx/nova";
 import { UIManager } from "../ui/UIManager";
 import { DebugOverlay } from "../ui/DebugOverlay";
 import { WalletManager } from "../net/WalletManager";
 import { Leaderboard } from "../net/Leaderboard";
 import {
   STAR_DUST_ENERGY, STAR_ENERGY_MAX,
-  NOVA_RADIUS, NOVA_BLAST_FORWARD, NOVA_DAMAGE_SCORE,
+  NOVA_DAMAGE_SCORE,
   FOV_NOVA_PUNCH, TONE_EXPOSURE, TONE_EXPOSURE_NOVA,
   DOUBLE_TAP_DELAY, DOUBLE_TAP_MAX_DIST, TAP_MAX_MOVE,
-  BASE_SPEED, MAX_SPEED, LEVEL_DURATION,
-  SPEED_MULTIPLIERS, SPEED_MULT_STEP, SPEED_MULT_CAP,
-  OBSTACLE_DENSITIES, DENSITY_STEP, DENSITY_CAP,
+  NOVA_RADIUS, LEVEL_DURATION,
 } from "../config";
-
-const SPAWN_STEP_BASE = 14; // reference band spacing at level-1 density
 
 export class GameEngine {
   [key: string]: any;
@@ -256,27 +254,10 @@ export class GameEngine {
     this.spawn = new SpawnManager({obstacles:this.obstacles, stardust:this.stardust}, seed);
   }
 
-  /** Calibrated speed multiplier for a level: table for 1..5, then
-      +SPEED_MULT_STEP per level, capped at SPEED_MULT_CAP. */
-  _speedMult(level){
-    if (level <= SPEED_MULTIPLIERS.length) return SPEED_MULTIPLIERS[level-1];
-    return Math.min(SPEED_MULT_CAP,
-      SPEED_MULTIPLIERS[SPEED_MULTIPLIERS.length-1] + (level - SPEED_MULTIPLIERS.length)*SPEED_MULT_STEP);
-  }
-
-  /** Calibrated obstacle density: table for 1..5, then +DENSITY_STEP per
-      level, capped at DENSITY_CAP. */
-  _density(level){
-    if (level <= OBSTACLE_DENSITIES.length) return OBSTACLE_DENSITIES[level-1];
-    return Math.min(DENSITY_CAP,
-      OBSTACLE_DENSITIES[OBSTACLE_DENSITIES.length-1] + (level - OBSTACLE_DENSITIES.length)*DENSITY_STEP);
-  }
-
-  /** Spawn band spacing from density: baseline at L1, tighter as density
-      rises. At L1 (density 5) this equals the reference's 14-unit step. */
-  _spawnStep(){
-    return Math.max(4, SPAWN_STEP_BASE * OBSTACLE_DENSITIES[0] / this._density(this.level));
-  }
+  // Thin wrappers over the pure, unit-tested progression math.
+  _speedMult(level){ return speedMult(level); }
+  _density(level){ return density(level); }
+  _spawnStep(){ return spawnStep(this.level); }
 
   collectDust(){
     this.dust++;
@@ -345,7 +326,7 @@ export class GameEngine {
       const oz = o.mesh ? o.mesh.position.z : o.z;
       const radial = Math.hypot(ox - p.x, oy - p.y);
       const dz = oz - p.z;
-      if (radial <= NOVA_RADIUS && dz <= NOVA_BLAST_FORWARD && dz >= -NOVA_RADIUS){
+      if (isInNovaZone(radial, dz)){
         this.obstacles.removeAndExplode(i, this.particles);
         this.score += NOVA_DAMAGE_SCORE;
       }
@@ -451,13 +432,10 @@ export class GameEngine {
         this.level++;
         this.ui.showToast("NIVEAU " + this.level + " — VITESSE ++");
       }
-      // Calibrated progression: interpolate smoothly between this level's and
+      // Calibrated progression: smooth interpolation between this level's and
       // the next level's speed multiplier across the level's duration. Base
       // speed and the 30s tier are unchanged (L1 t=0 => BASE_SPEED exactly).
-      const m0 = this._speedMult(this.level);
-      const m1 = this._speedMult(this.level + 1);
-      const frac = clamp(this.levelT / LEVEL_DURATION, 0, 1);
-      this.speed = Math.min(MAX_SPEED, BASE_SPEED * (m0 + (m1 - m0)*frac));
+      this.speed = speedAt(this.level, this.levelT / LEVEL_DURATION);
       this.dist += this.speed*dt;
       this.score += this.speed*dt*1.5;
       this.player.pos.z -= this.speed*dt;
