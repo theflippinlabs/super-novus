@@ -1,0 +1,15 @@
+# Nixpacks build plan for Railway (kept in sync with railway.json).
+# Pins Node 20 and makes the install → build → start pipeline explicit so the
+# deploy is reproducible regardless of auto-detection.
+
+[phases.setup]
+nixPkgs = ["nodejs_20"]
+
+[phases.install]
+cmds = ["npm ci"]
+
+[phases.build]
+cmds = ["npm run build"]
+
+[start]
+cmd = "npm start"
