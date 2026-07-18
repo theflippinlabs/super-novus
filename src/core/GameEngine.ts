@@ -562,6 +562,8 @@ export class GameEngine {
     const localBest = this.leaderboard.saveLocalBest(finalScore, finalDist, this.dust);
     const isNewRecord = finalScore > prevBest && finalScore > 0;
     this.best = Math.max(this.best, finalScore, localBest.score);
+    // Accumulate local lifetime stats for the profile (frontend-only for now).
+    this.profile.recordRun(finalScore, finalDist, this.dust, this.bigBangs);
 
     // Submit BEFORE leaving the screen (if a wallet is connected); otherwise
     // store locally so it auto-syncs when a wallet reconnects.

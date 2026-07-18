@@ -118,30 +118,6 @@ Deno.serve(async (req) => {
     }
   }
 
-  // 6) Record the run + ensure a profile row exists. Best-effort: any failure
-  //    here must never break the score submission response above.
-  try {
-    const now2 = new Date();
-    const weekStart = weekStartUTC(now2), monthStart = monthStartUTC(now2);
-    const rankIn = async (period: "weekly" | "monthly", start: string): Promise<number | null> => {
-      const { count, error } = await supabase
-        .from("sn_leaderboard").select("*", { count: "exact", head: true })
-        .eq("period_type", period).eq("period_start", start).gt("best_score", score);
-      if (error) return null;
-      return (count ?? 0) + 1;
-    };
-    const [weeklyRank, monthlyRank] = await Promise.all([rankIn("weekly", weekStart), rankIn("monthly", monthStart)]);
-    await supabase.from("sn_runs").insert({
-      wallet, score, dist, dust, big_bangs: bigBangs,
-      weekly_rank: weeklyRank, monthly_rank: monthlyRank,
-    });
-    // Create an empty profile on first score so "member since" is anchored.
-    await supabase.from("sn_profiles").upsert(
-      { wallet: wallet.toLowerCase() },
-      { onConflict: "wallet", ignoreDuplicates: true },
-    );
-  } catch (_e) { /* run/profile recording is best-effort */ }
-
   return json({ ok: true, saved });
 });
 

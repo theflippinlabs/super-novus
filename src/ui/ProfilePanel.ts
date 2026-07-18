@@ -5,7 +5,7 @@
    (identity, ranks, lifetime stats, game history, reward history).
    Fails soft: without Supabase it still shows the generated avatar and explains
    that online profiles aren't configured. */
-import { Profile, type ProfileRow, type ProfileStats, type RunRow, type RewardRow } from "../net/Profile";
+import { Profile, type ProfileRow, type ProfileStats } from "../net/Profile";
 import { Leaderboard } from "../net/Leaderboard";
 import { WalletManager } from "../net/WalletManager";
 import { generateAvatar } from "./Avatar";
@@ -117,23 +117,24 @@ export class ProfilePanel {
     this.el.innerHTML = this.shell(this.avatarSrc(null), cachedNick, addr, true);
     this.bindShell();
 
-    const [row, stats, runs, rewards, weeklyRank, monthlyRank] = await Promise.all([
-      this.profile.get(),
-      this.profile.stats(),
-      this.profile.runs(),
-      this.profile.rewards(),
-      this.leaderboard.myRank("weekly"),
-      this.leaderboard.myRank("monthly"),
-    ]);
-
+    // Identity + lifetime stats are local (instant). Render immediately so the
+    // dashboard never waits on the network.
+    const [row, stats] = await Promise.all([this.profile.get(), this.profile.stats()]);
     const nickname = this.nick(row);
-    this.el.innerHTML = this.shell(this.avatarSrc(row), nickname, addr, false, { stats, runs, rewards, row, weeklyRank, monthlyRank });
+    this.el.innerHTML = this.shell(this.avatarSrc(row), nickname, addr, false, { stats, row, currentRank: null });
     this.bindShell(row);
+
+    // Current rank is the only networked value — fill it in if/when it resolves;
+    // it stays "—" offline. (Best weekly/monthly ranks arrive with the backend.)
+    this.leaderboard.myRank("weekly").then((r) => {
+      const cell = this.el.querySelector("#pfCurRank");
+      if (cell && r !== null && r !== undefined) cell.textContent = `#${r}`;
+    }).catch(() => { /* offline → stays "—" */ });
   }
 
   private shell(
     avatar: string, nickname: string | null, addr: string, loading: boolean,
-    d?: { stats: ProfileStats | null; runs: RunRow[]; rewards: RewardRow[]; row: ProfileRow | null; weeklyRank: number | null; monthlyRank: number | null },
+    d?: { stats: ProfileStats | null; row: ProfileRow | null; currentRank: number | null },
   ): string {
     const name = nickname || `${addr.slice(0, 6)}…${addr.slice(-4)}`;
     const configWarn = this.profile.available ? "" : `<div class="pfWarn">${t("profile.notConfigured")}</div>`;
@@ -154,7 +155,7 @@ export class ProfilePanel {
       return `<div class="pfCard">${head}${configWarn}<div class="pfMuted pfPad">${t("common.loading")}</div></div>`;
     }
 
-    const { stats, runs, rewards, weeklyRank, monthlyRank, row } = d;
+    const { stats, currentRank, row } = d;
     const rk = (n: number | null) => (n === null || n === undefined ? "—" : `#${n}`);
     const meta = `
       <div class="pfMeta">
@@ -163,7 +164,7 @@ export class ProfilePanel {
       </div>`;
     const ranks = `
       <div class="pfRanks">
-        <div class="pfRank"><div class="pfRankV">${rk(weeklyRank)}</div><div class="pfRankL">${t("profile.currentRank")}</div></div>
+        <div class="pfRank"><div class="pfRankV" id="pfCurRank">${rk(currentRank)}</div><div class="pfRankL">${t("profile.currentRank")}</div></div>
         <div class="pfRank"><div class="pfRankV">${rk(stats?.best_weekly_rank ?? null)}</div><div class="pfRankL">${t("profile.bestWeekly")}</div></div>
         <div class="pfRank"><div class="pfRankV">${rk(stats?.best_monthly_rank ?? null)}</div><div class="pfRankL">${t("profile.bestMonthly")}</div></div>
       </div>`;
@@ -184,32 +185,9 @@ export class ProfilePanel {
           <div class="pfTile"><div class="pfTileIc">${ic}</div><div class="pfTileV">${v}</div><div class="pfTileL">${l}</div></div>`).join("")}
         </div></div>`;
 
-    const history = `
-      <div class="pfSection"><h3 class="pfSecH">${t("history.title")}</h3>
-        ${runs.length ? `<div class="pfList">${runs.map((r) => `
-          <div class="pfRow">
-            <span class="pfRowDate">${this.date(r.created_at)}</span>
-            <span class="pfRowMain"><b>${this.num(r.score)}</b> · ${this.num(r.dist)} m${r.big_bangs ? ` · 🌌${r.big_bangs}` : ""}</span>
-            <span class="pfRowPos">${r.weekly_rank ? "S#" + r.weekly_rank : ""}${r.monthly_rank ? " · M#" + r.monthly_rank : ""}</span>
-          </div>`).join("")}</div>` : `<div class="pfMuted pfPad">${t("history.empty")}</div>`}
-      </div>`;
-
-    const rewardsHtml = `
-      <div class="pfSection"><h3 class="pfSecH">${t("rewards.title")}</h3>
-        ${rewards.length ? `<div class="pfList">${rewards.map((r) => {
-          const champ = r.period_type === "weekly" ? t("rewards.weeklyChampion") : t("rewards.monthlyChampion");
-          const desc = r.period_type === "weekly" ? t("rewards.weeklyReward") : t("rewards.monthlyReward");
-          const st = r.status === "paid" ? t("rewards.statusPaid") : r.status === "completed" ? t("rewards.statusCompleted") : t("rewards.statusPending");
-          const cls = r.status === "paid" || r.status === "completed" ? "pfPaid" : "pfPending";
-          return `<div class="pfReward">
-            <div class="pfRewTop"><b>🏆 ${champ}</b><span class="pfBadge ${cls}">${st}</span></div>
-            <div class="pfRewSub">${this.date(r.period_start)} · ${t("rewards.firstPlace")}</div>
-            <div class="pfRewDesc">${desc}</div>
-          </div>`;
-        }).join("")}</div>` : `<div class="pfMuted pfPad">${t("rewards.empty")}</div>`}
-      </div>`;
-
-    return `<div class="pfCard">${head}${configWarn}${meta}${ranks}${statsGrid}${history}${rewardsHtml}</div>`;
+    // Game history + reward history are intentionally out of scope for now
+    // (frontend-first). They'll return with the Supabase-backed profile.
+    return `<div class="pfCard">${head}${configWarn}${meta}${ranks}${statsGrid}</div>`;
   }
 
   private bindShell(row?: ProfileRow | null): void {

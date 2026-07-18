@@ -148,7 +148,9 @@ export class Leaderboard {
       return [];
     }
     this.lastError = null;
-    const rows = (data ?? []).map((x) => ({
+    // Nickname/avatar per row come from the (future) profiles table — null for
+    // now, so the board renders a generated avatar + short address. Frontend-only.
+    return (data ?? []).map((x) => ({
       pseudo: shortAddr(x.wallet),
       wallet: x.wallet,
       score: x.best_score,
@@ -158,25 +160,6 @@ export class Leaderboard {
       nickname: null as string | null,
       avatar: null as string | null,
     }));
-    // Attach nickname + avatar so the board shows identities, not addresses.
-    await this.attachProfiles(rows);
-    return rows;
-  }
-
-  /** Merge nickname + avatar from sn_profiles into board rows (best-effort). */
-  private async attachProfiles(rows: BoardRow[]): Promise<void> {
-    if (!this.client || !rows.length) return;
-    const lower = rows.map((r) => r.wallet.toLowerCase());
-    const { data, error } = await this.client
-      .from("sn_profiles").select("wallet,nickname,avatar_url").in("wallet", lower);
-    if (error || !data) return;
-    const byWallet = new Map<string, { nickname: string | null; avatar_url: string | null }>();
-    for (const p of data as Array<{ wallet: string; nickname: string | null; avatar_url: string | null }>)
-      byWallet.set(p.wallet.toLowerCase(), p);
-    for (const r of rows) {
-      const p = byWallet.get(r.wallet.toLowerCase());
-      if (p) { r.nickname = p.nickname; r.avatar = p.avatar_url; }
-    }
   }
 
   /** Signed submission through the Edge Function. Returns true if stored.
