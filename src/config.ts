@@ -91,6 +91,9 @@ export const LIVES = 3;
 // --- Wallet / chain ---
 export const SUPPORTED_CHAIN_ID = 25;  // Cronos
 export const OPTIONAL_CHAIN_IDS = [1];
+// WalletConnect Cloud Project ID (public client identifier, safe in frontend).
+// VITE_WC_PROJECT_ID env overrides this default when set (e.g. in Vercel).
+export const WC_PROJECT_ID_DEFAULT = "95d375443a317fc40262e047a99a06a1";
 // EIP-3085 params so an injected wallet can add/switch to Cronos.
 export const CRONOS_PARAMS = {
   chainId: "0x19", // 25

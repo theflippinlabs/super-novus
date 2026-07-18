@@ -4,7 +4,7 @@
    is missing AND no injected provider exists, `available` is false and the UI
    shows an explicit, non-blocking state. Guest mode is always playable.
    No mock wallets, ever. */
-import { SUPPORTED_CHAIN_ID, OPTIONAL_CHAIN_IDS, CRONOS_PARAMS } from "../config";
+import { SUPPORTED_CHAIN_ID, OPTIONAL_CHAIN_IDS, CRONOS_PARAMS, WC_PROJECT_ID_DEFAULT } from "../config";
 
 type Eip1193 = {
   request(args: { method: string; params?: unknown[] }): Promise<unknown>;
@@ -32,7 +32,8 @@ export class WalletManager {
   private bound: { p: Eip1193; handlers: Record<string, (...a: unknown[]) => void> } | null = null;
 
   get projectId(): string {
-    return (import.meta.env.VITE_WC_PROJECT_ID as string | undefined) ?? "";
+    const env = (import.meta.env.VITE_WC_PROJECT_ID as string | undefined) ?? "";
+    return env || WC_PROJECT_ID_DEFAULT;
   }
   get injected(): Eip1193 | null {
     return ((window as unknown as { ethereum?: Eip1193 }).ethereum) ?? null;
