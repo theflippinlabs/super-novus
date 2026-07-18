@@ -1,0 +1,18 @@
+# Supabase project config — read by the CLI and the GitHub integration on deploy.
+# CRITICAL: these Edge Functions are called from the browser with the PUBLIC
+# publishable key (sb_publishable_…), which is NOT a JWT. They MUST be deployed
+# with JWT verification OFF, otherwise the API gateway rejects every call with
+# 401 before the function runs (this was the cause of "Enregistrement impossible").
+# Each function verifies authenticity itself (EIP-191 wallet signature), so
+# gateway JWT verification is neither needed nor compatible here.
+
+project_id = "xmjqrnlmcvrltjzuptao"
+
+[functions.submit-score]
+verify_jwt = false
+
+[functions.record-bigbang]
+verify_jwt = false
+
+[functions.record-payout]
+verify_jwt = false
