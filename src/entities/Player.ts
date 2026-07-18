@@ -68,15 +68,18 @@ export class Player {
     this.core = new THREE.Mesh(new THREE.SphereGeometry(this.r, 40, 30), this.coreMat);
     this.group.add(this.core);
 
-    this.g1 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }));
-    this.g1.scale.setScalar(9);
+    // Smaller, dimmer white halo — keeps the core visible without washing out
+    // nearby obstacles (gameplay readability over bloom).
+    this.g1 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, transparent: true, opacity: .5, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.g1.scale.setScalar(6);
     this.g2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.ember, transparent: true, opacity: .75, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.g2.scale.setScalar(15);
     this.group.add(this.g1, this.g2);
 
+    // Warmer, dimmer, smaller lens flare (was bright white and oversized).
     this.flare = new THREE.Sprite(new THREE.SpriteMaterial({
       map: canvasTex(128, 128, (ctx) => {
-        ctx.strokeStyle = "rgba(255,240,210,.85)";
+        ctx.strokeStyle = "rgba(255,208,150,.7)";
         for (const [w, l] of [[2.4, 62], [1.2, 40]]) {
           ctx.lineWidth = w;
           ctx.beginPath();
@@ -85,9 +88,9 @@ export class Player {
           ctx.stroke();
         }
       }),
-      transparent: true, opacity: .7, depthWrite: false, blending: THREE.AdditiveBlending,
+      transparent: true, opacity: .32, depthWrite: false, blending: THREE.AdditiveBlending,
     }));
-    this.flare.scale.setScalar(13);
+    this.flare.scale.setScalar(9);
     this.group.add(this.flare);
 
     this.light = new THREE.PointLight(0xFFC873, PLAYER_LIGHT_INTENSITY, 110, 1.6);
@@ -107,7 +110,7 @@ export class Player {
     this.coreMat.uniforms.uTime.value = t;
     this.core.rotation.y += dt * 0.6;
     this.core.rotation.x += dt * 0.25;
-    this.g1.material.opacity = 0.92 + Math.sin(t * 7) * 0.08;
+    this.g1.material.opacity = 0.5 + Math.sin(t * 7) * 0.06;
     this.g2.scale.setScalar(15 + Math.sin(t * 4.3) * 1.8);
     this.flare.material.rotation += dt * 0.3;
     if (this.invuln > 0) {

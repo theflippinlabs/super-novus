@@ -34,17 +34,18 @@ export class Environment {
       this.group.add(gal);
     }
 
-    /* --- ÉTOILE-REPÈRE très brillante (point de repère galactique) --- */
+    /* --- ÉTOILE-REPÈRE (point de repère galactique) — atténuée : le grand
+       flare blanc et le halo cramaient l'écran et gênaient la lisibilité. --- */
     this.landmark = new THREE.Group();
-    const lmCore = new THREE.Sprite(new THREE.SpriteMaterial({map:TEX.white, transparent:true, opacity:1, depthWrite:false, blending:THREE.AdditiveBlending}));
-    lmCore.scale.setScalar(56);
+    const lmCore = new THREE.Sprite(new THREE.SpriteMaterial({map:TEX.white, transparent:true, opacity:.55, depthWrite:false, blending:THREE.AdditiveBlending}));
+    lmCore.scale.setScalar(38);
     this.landmark.add(lmCore);
-    this.lmFlare = new THREE.Sprite(new THREE.SpriteMaterial({map:TEX.flareCross, transparent:true, opacity:.85, depthWrite:false, blending:THREE.AdditiveBlending}));
-    this.lmFlare.scale.setScalar(150);
+    this.lmFlare = new THREE.Sprite(new THREE.SpriteMaterial({map:TEX.flareCross, transparent:true, opacity:.38, depthWrite:false, blending:THREE.AdditiveBlending}));
+    this.lmFlare.scale.setScalar(90);
     this.landmark.add(this.lmFlare);
     /* halo volumétrique très subtil */
-    const lmHalo = new THREE.Sprite(new THREE.SpriteMaterial({map:TEX.white, transparent:true, opacity:.10, depthWrite:false, blending:THREE.AdditiveBlending}));
-    lmHalo.scale.setScalar(300);
+    const lmHalo = new THREE.Sprite(new THREE.SpriteMaterial({map:TEX.white, transparent:true, opacity:.05, depthWrite:false, blending:THREE.AdditiveBlending}));
+    lmHalo.scale.setScalar(240);
     this.landmark.add(lmHalo);
     this.landmark.position.set(-150, 170, -430);
     this.group.add(this.landmark);

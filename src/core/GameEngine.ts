@@ -44,12 +44,14 @@ export class GameEngine {
 
     this.camera = new THREE.PerspectiveCamera(84, innerWidth/innerHeight, 0.1, 1400);
 
-    /* éclairage : lumière directionnelle depuis l'étoile-repère → terminateur réaliste */
-    this.scene.add(new THREE.AmbientLight(0x2c3050, 0.85));
-    const sunLight = new THREE.DirectionalLight(0xf2ecdc, 1.7);
+    /* éclairage : lumière directionnelle depuis l'étoile-repère → terminateur réaliste.
+       Intensités réduites + teinte réchauffée pour éviter les bords de planètes
+       cramés en blanc — la lisibilité du gameplay prime sur le bloom. */
+    this.scene.add(new THREE.AmbientLight(0x2c3050, 0.6));
+    const sunLight = new THREE.DirectionalLight(0xf0e2c6, 1.25);
     sunLight.position.set(-150, 170, 60);
     this.scene.add(sunLight);
-    const fill = new THREE.DirectionalLight(0x8090c0, 0.22);
+    const fill = new THREE.DirectionalLight(0x8090c0, 0.16);
     fill.position.set(120, -60, -40);
     this.scene.add(fill);
 
