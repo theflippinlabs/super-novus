@@ -90,10 +90,21 @@ export const LIVES = 3;
 // --- Wallet / chain ---
 export const SUPPORTED_CHAIN_ID = 25;  // Cronos
 export const OPTIONAL_CHAIN_IDS = [1];
+// EIP-3085 params so an injected wallet can add/switch to Cronos.
+export const CRONOS_PARAMS = {
+  chainId: "0x19", // 25
+  chainName: "Cronos",
+  nativeCurrency: { name: "Cronos", symbol: "CRO", decimals: 18 },
+  rpcUrls: ["https://evm.cronos.org"],
+  blockExplorerUrls: ["https://cronoscan.com"],
+} as const;
 
 // --- Leaderboard ---
 export const LEADERBOARD_TOP_N = 10;
 export const LOCAL_SAVE_KEY = "super-novus:best";
+export const LEADERBOARD_PERIODS = ["weekly", "monthly"] as const;
+export type LeaderboardPeriod = (typeof LEADERBOARD_PERIODS)[number];
+export const WEEKLY_PRIZE_USD = 50;   // displayed only; no prize distribution logic
 
 // --- Rendering ---
 export const PIXEL_RATIO_CAP = 2;
