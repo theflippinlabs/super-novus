@@ -27,6 +27,7 @@ import { AdminPanel } from "../ui/AdminPanel";
 import { Profile } from "../net/Profile";
 import { ProfilePanel } from "../ui/ProfilePanel";
 import { Joystick } from "../input/Joystick";
+import { Diagnostics } from "../ui/Diagnostics";
 import { i18n } from "../i18n";
 import {
   STAR_DUST_ENERGY, STAR_ENERGY_MAX,
@@ -99,6 +100,9 @@ export class GameEngine {
     // Player profile dashboard (avatar + nickname + stats/history/rewards).
     this.profilePanel = new ProfilePanel(this.profile, this.wallet, this.leaderboard);
     this.profilePanel.setIdentityListener(() => this._refreshIdentity());
+    // Score-pipeline diagnostic (?diag=1) — zero cost otherwise.
+    if (new URLSearchParams(location.search).get("diag") === "1")
+      this.diagnostics = new Diagnostics(this.leaderboard, this.wallet);
 
     this.running = false; this.paused = false;
     this.score = 0; this.dist = 0; this.dust = 0; this.best = 0;
@@ -575,8 +579,13 @@ export class GameEngine {
     // store locally so it auto-syncs when a wallet reconnects.
     let saved = false;
     const hasWallet = Boolean(this.leaderboard.pseudo);
-    if (hasWallet) saved = await this.leaderboard.submit(finalScore, finalDist, this.dust, this.bigBangs);
-    else if (this.leaderboard.available && finalScore > 0)
+    if (hasWallet){
+      saved = await this.leaderboard.submit(finalScore, finalDist, this.dust, this.bigBangs);
+      // If it failed, keep the run locally so it auto-syncs later (e.g. once the
+      // Edge Function is deployed / after a signature retry). No run is lost.
+      if (!saved && finalScore > 0)
+        this.leaderboard.savePending(finalScore, finalDist, this.dust, this.bigBangs);
+    } else if (this.leaderboard.available && finalScore > 0)
       this.leaderboard.savePending(finalScore, finalDist, this.dust, this.bigBangs);
 
     // Ranks only make sense once the score is on the board.
@@ -598,7 +607,11 @@ export class GameEngine {
       this.ui.setRank("monthly", monthlyR);
       const ss = this.ui.saveState;
       if (saved){ ss.textContent = i18n.t("gameover.saved"); ss.className = "ok"; }
-      else if (hasWallet){ ss.textContent = i18n.t("gameover.saveFailed"); ss.className = "no"; }
+      else if (hasWallet){
+        // Show the EXACT reason (never hidden). Kept locally, will auto-sync later.
+        ss.textContent = "⚠ " + (this.leaderboard.lastSubmitReason || i18n.t("gameover.saveFailed"));
+        ss.className = "no";
+      }
       else if (this.leaderboard.available){ ss.textContent = i18n.t("gameover.saveGuest"); ss.className = "no"; }
       else { ss.textContent = i18n.t("gameover.lbSoon"); ss.className = "no"; }
       this._updateBigBangButton();
