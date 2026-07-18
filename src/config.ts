@@ -70,7 +70,7 @@ export const CAMERA_FOLLOW_FACTOR = 13;    // exponential lerp rate
 export const CAMERA_SHAKE_HIT = 0.8;
 export const CAMERA_SHAKE_DEATH = 1.6;
 export const FOV_BASE = 84;
-export const FOV_SPEED_FACTOR = 0.15;
+export const FOV_SPEED_FACTOR = 0.17;   // a touch more FOV stretch at speed (feel only)
 export const FOV_NOVA_PUNCH = 10;
 export const FOV_NEAR_MISS = -6;
 
@@ -177,6 +177,6 @@ export const PROFILE_HISTORY_LIMIT = 12;   // latest runs shown in the profile
 
 // --- Rendering ---
 export const PIXEL_RATIO_CAP = 2;
-export const TONE_EXPOSURE = 1.15;
-export const TONE_EXPOSURE_NOVA = 1.6;
+export const TONE_EXPOSURE = 1.08;       // crisper, less bloom (was 1.15)
+export const TONE_EXPOSURE_NOVA = 1.42;  // Nova punch without blowing out (was 1.6)
 export const DRAW_CALL_BUDGET = 120;

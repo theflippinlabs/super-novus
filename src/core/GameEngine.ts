@@ -47,7 +47,7 @@ export class GameEngine {
     this.renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
     this.renderer.setSize(innerWidth, innerHeight);
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    this.renderer.toneMappingExposure = 1.15;
+    this.renderer.toneMappingExposure = 1.08;
     this.renderer.outputEncoding = THREE.sRGBEncoding;
     document.body.appendChild(this.renderer.domElement);
 
@@ -60,11 +60,12 @@ export class GameEngine {
     /* éclairage : lumière directionnelle depuis l'étoile-repère → terminateur réaliste.
        Intensités réduites + teinte réchauffée pour éviter les bords de planètes
        cramés en blanc — la lisibilité du gameplay prime sur le bloom. */
-    this.scene.add(new THREE.AmbientLight(0x2c3050, 0.48));
-    const sunLight = new THREE.DirectionalLight(0xf0e2c6, 1.0);
+    // Cooler, blue/violet-leaning key + fill for a premium cosmic mood.
+    this.scene.add(new THREE.AmbientLight(0x2b3060, 0.5));
+    const sunLight = new THREE.DirectionalLight(0xdbe6ff, 1.02);
     sunLight.position.set(-150, 170, 60);
     this.scene.add(sunLight);
-    const fill = new THREE.DirectionalLight(0x8090c0, 0.14);
+    const fill = new THREE.DirectionalLight(0x8a7dff, 0.16);
     fill.position.set(120, -60, -40);
     this.scene.add(fill);
 
@@ -439,6 +440,7 @@ export class GameEngine {
   collectDust(){
     this.dust++;
     this.score += 100;
+    this.ui.floatScore("+100", "dust");
     // STAR ENERGY charges only from dust; fills at ~12 clusters.
     if (this.energy < STAR_ENERGY_MAX){
       this.energy = Math.min(STAR_ENERGY_MAX, this.energy + STAR_DUST_ENERGY);
@@ -460,6 +462,7 @@ export class GameEngine {
 
     const p = this.player.pos.clone();
     this.ui.flashNova(); // white-gold full-screen flash ~400ms
+    this.ui.floatScore("NOVA", "nova");
 
     // Shockwave ring — additive torus, scale 1 → ~90.
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.5, 12, 64),

@@ -210,7 +210,18 @@
   #hitFlash{position:fixed;inset:0;background:radial-gradient(ellipse at 50% 50%, transparent 35%, rgba(255,70,25,.5) 100%);
     opacity:0;pointer-events:none;z-index:8}
   #vignette{position:fixed;inset:0;pointer-events:none;z-index:4;
-    background:radial-gradient(ellipse at 50% 50%, transparent 64%, rgba(2,2,14,.55) 100%)}
+    background:radial-gradient(ellipse at 50% 50%, transparent 62%, rgba(2,2,14,.6) 100%)}
+
+  /* ===== Floating score pop-ups ===== */
+  #floatLayer{position:fixed;inset:0;pointer-events:none;z-index:6;overflow:hidden}
+  .floatScore{position:absolute;font-family:inherit;font-weight:800;letter-spacing:1px;white-space:nowrap;
+    font-variant-numeric:tabular-nums;transform:translate(-50%,-50%);will-change:transform,opacity;
+    text-shadow:0 0 12px currentColor, 0 2px 5px rgba(0,0,0,.65);animation:floatUp 1s cubic-bezier(.2,.7,.2,1) forwards}
+  @keyframes floatUp{
+    0%{opacity:0;transform:translate(-50%,-50%) scale(.6)}
+    16%{opacity:1;transform:translate(-50%,-64%) scale(1.08)}
+    100%{opacity:0;transform:translate(-50%,-172%) scale(1)}}
+  @media (prefers-reduced-motion: reduce){.floatScore{animation-duration:.5s}}
 </style>
 </head>
 <body>
@@ -236,6 +247,7 @@
 <div id="whiteout"></div>
 <div id="novaFlash"></div>
 <div id="hitFlash"></div>
+<div id="floatLayer"></div>
 
 <div class="screen" id="menu">
   <div id="menuTop">

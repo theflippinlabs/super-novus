@@ -14,10 +14,10 @@ export class Environment {
 
     /* --- nébuleuses très subtiles (4, faible opacité) --- */
     const nebs = [
-      [TEX.nebula(265, 300), 620, -120, 60, -340, .30],
-      [TEX.nebula(215, 250), 680, 180, -80, -390, .26],
-      [TEX.nebula(330, 355), 540, -220, -110, -320, .22],
-      [TEX.nebula(195, 230), 580, 90, 170, -370, .22],
+      [TEX.nebula(258, 292), 620, -120, 60, -340, .34],
+      [TEX.nebula(210, 245), 680, 180, -80, -390, .30],
+      [TEX.nebula(272, 305), 540, -220, -110, -320, .26],
+      [TEX.nebula(196, 226), 580, 90, 170, -370, .24],
     ];
     for (const [t, s, x, y, z, o] of nebs){
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:t, transparent:true, opacity:o, depthWrite:false, blending:THREE.AdditiveBlending}));
@@ -65,8 +65,9 @@ export class Environment {
       g.setAttribute("color", new THREE.BufferAttribute(c,3));
       this.group.add(new THREE.Points(g, new THREE.PointsMaterial({vertexColors:true, size, sizeAttenuation:true, transparent:true, opacity:op, depthWrite:false})));
     };
-    mkStars(1700, 0.9, 330, [0xffffff, 0xdfe8ff, 0xffeedd, 0xe8f4ff], .95);
-    mkStars(900, 1.7, 270, [0xbdd4ff, 0xffe2b8, 0xf5d8ff, 0xc8f0ff], .7);
+    // Cooler, blue/violet-leaning star field (a few warm accents removed).
+    mkStars(1700, 0.9, 330, [0xffffff, 0xdfe8ff, 0xcfe0ff, 0xe8f4ff], .95);
+    mkStars(900, 1.7, 270, [0xbdd4ff, 0xbfe0ff, 0xe6d8ff, 0xc8f0ff], .72);
     mkStars(600, 0.55, 380, [0xffffff, 0xcfd8ee], .8);
 
     /* --- planètes de décor réalistes, distances variées --- */
@@ -106,7 +107,7 @@ export class Environment {
       dArr[i*3+2] = -Math.random()*this.DUST_BOX;
     }
     this.speedGeo.setAttribute("position", new THREE.BufferAttribute(dArr, 3));
-    const sd = new THREE.Points(this.speedGeo, new THREE.PointsMaterial({color:0xaab0d8, size:0.36, transparent:true, opacity:.55, depthWrite:false}));
+    const sd = new THREE.Points(this.speedGeo, new THREE.PointsMaterial({color:0xbcd0ff, size:0.46, transparent:true, opacity:.62, depthWrite:false}));
     sd.frustumCulled = false;
     scene.add(sd);
 
@@ -119,7 +120,7 @@ export class Environment {
       d2[i*3+2] = -Math.random()*this.DUST2_BOX;
     }
     this.dust2Geo.setAttribute("position", new THREE.BufferAttribute(d2, 3));
-    const sd2 = new THREE.Points(this.dust2Geo, new THREE.PointsMaterial({color:0x8890b8, size:0.8, transparent:true, opacity:.3, depthWrite:false}));
+    const sd2 = new THREE.Points(this.dust2Geo, new THREE.PointsMaterial({color:0x9aa0d8, size:0.85, transparent:true, opacity:.32, depthWrite:false}));
     sd2.frustumCulled = false;
     scene.add(sd2);
   }

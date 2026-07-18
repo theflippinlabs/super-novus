@@ -25,6 +25,7 @@ export class UIManager {
   energyWrap = $("energyWrap");
   energyFill = $("energyFill");
   novaFlash = $("novaFlash");
+  floatLayer = $("floatLayer");
   pauseBtn = $("pauseBtn") as HTMLButtonElement;
   musicBtn = $("musicBtn") as HTMLButtonElement;
   toast = $("levelToast");
@@ -121,6 +122,22 @@ export class UIManager {
       b.classList.toggle("off", !on);
       b.setAttribute("aria-label", on ? "Couper la musique" : "Activer la musique");
     }
+  }
+
+  /** Pop a floating score/label near the player and let it rise + fade (~1s).
+      Purely cosmetic feedback — spawned from collect / Nova events. */
+  floatScore(text: string, kind: "dust" | "graze" | "nova" = "dust"): void {
+    const el = document.createElement("div");
+    el.className = "floatScore";
+    el.textContent = text;
+    const color = kind === "nova" ? "#e6c8ff" : kind === "graze" ? "#a5d4ff" : "#ffe08a";
+    el.style.color = color;
+    el.style.fontSize = kind === "nova" ? "28px" : kind === "graze" ? "15px" : "17px";
+    // Cluster around the player (screen centre, slightly low) with light scatter.
+    el.style.left = `${48 + (Math.random() * 8 - 4)}%`;
+    el.style.top = `${kind === "nova" ? 50 : 60 + (Math.random() * 6 - 3)}%`;
+    this.floatLayer.appendChild(el);
+    setTimeout(() => el.remove(), 1050);
   }
 
   /** White-gold full-screen flash for Nova Blast (~400ms). */
