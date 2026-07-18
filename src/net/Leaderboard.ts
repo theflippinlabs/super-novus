@@ -9,7 +9,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { LOCAL_SAVE_KEY, SUPABASE_URL_DEFAULT, SUPABASE_ANON_KEY_DEFAULT, type LeaderboardPeriod } from "../config";
 import { WalletManager, shortAddr } from "./WalletManager";
 
-export interface BoardRow { pseudo: string; wallet: string; score: number; dist: number; dust: number; bigBangs: number; }
+export interface BoardRow { pseudo: string; wallet: string; score: number; dist: number; dust: number; bigBangs: number; nickname: string | null; avatar: string | null; }
 export interface LocalBest { v: 1; score: number; dist: number; dust: number; }
 
 const LOG = "[Supabase]";
@@ -148,14 +148,35 @@ export class Leaderboard {
       return [];
     }
     this.lastError = null;
-    return (data ?? []).map((x) => ({
+    const rows = (data ?? []).map((x) => ({
       pseudo: shortAddr(x.wallet),
       wallet: x.wallet,
       score: x.best_score,
       dist: x.best_dist,
       dust: x.best_dust,
       bigBangs: x.big_bangs ?? 0,
+      nickname: null as string | null,
+      avatar: null as string | null,
     }));
+    // Attach nickname + avatar so the board shows identities, not addresses.
+    await this.attachProfiles(rows);
+    return rows;
+  }
+
+  /** Merge nickname + avatar from sn_profiles into board rows (best-effort). */
+  private async attachProfiles(rows: BoardRow[]): Promise<void> {
+    if (!this.client || !rows.length) return;
+    const lower = rows.map((r) => r.wallet.toLowerCase());
+    const { data, error } = await this.client
+      .from("sn_profiles").select("wallet,nickname,avatar_url").in("wallet", lower);
+    if (error || !data) return;
+    const byWallet = new Map<string, { nickname: string | null; avatar_url: string | null }>();
+    for (const p of data as Array<{ wallet: string; nickname: string | null; avatar_url: string | null }>)
+      byWallet.set(p.wallet.toLowerCase(), p);
+    for (const r of rows) {
+      const p = byWallet.get(r.wallet.toLowerCase());
+      if (p) { r.nickname = p.nickname; r.avatar = p.avatar_url; }
+    }
   }
 
   /** Signed submission through the Edge Function. Returns true if stored.

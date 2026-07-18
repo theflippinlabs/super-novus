@@ -131,7 +131,9 @@
   .lbRow{display:flex;justify-content:space-between;align-items:baseline;padding:4px 2px;
     font-size:12.5px;font-variant-numeric:tabular-nums;border-bottom:1px solid rgba(255,255,255,.05)}
   .lbRow:last-child{border-bottom:none}
-  .lbRow .rank{color:var(--dim);width:26px;text-align:left;font-weight:700}
+  .lbRow .rank{color:var(--dim);width:20px;text-align:left;font-weight:700}
+  .lbRow .lbAvatar{width:26px;height:26px;border-radius:50%;margin-right:8px;object-fit:cover;
+    background:#0a0e24;border:1px solid rgba(245,197,66,.3);flex-shrink:0}
   .lbRow .name{flex:1;text-align:left;letter-spacing:1px;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .lbRow .pts{color:var(--gold);font-weight:800;margin-left:10px}
   .lbRow.me{background:rgba(245,197,66,.1);border-radius:6px}
@@ -148,6 +150,32 @@
   .lbPrize{font-size:10px;letter-spacing:1.5px;color:var(--gold);font-weight:700;margin:0 0 8px;text-align:center;line-height:1.55}
   .lbPrize span{color:#c8cfe8;font-weight:600}
 
+  /* ===== Menu top bar: language + profile ===== */
+  #menuTop{position:absolute;top:calc(10px + env(safe-area-inset-top));left:12px;right:12px;
+    display:flex;justify-content:flex-end;align-items:center;gap:8px;z-index:12}
+  .langSel{display:flex;gap:3px;background:rgba(10,14,36,.5);border:1px solid rgba(140,170,255,.2);
+    border-radius:10px;padding:3px}
+  .langBtn{pointer-events:auto;font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.4px;
+    color:var(--dim);background:none;border:none;border-radius:7px;padding:6px 6px;cursor:pointer}
+  .langBtn.active{color:#050418;background:linear-gradient(180deg,#FFEDB0,var(--gold) 60%,#D89B1E)}
+  .pfChip{display:none;align-items:center;gap:8px;pointer-events:auto;cursor:pointer;
+    background:rgba(10,14,36,.5);border:1px solid rgba(140,170,255,.25);border-radius:30px;padding:4px 12px 4px 4px}
+  .chipAvatar{width:30px;height:30px;border-radius:50%;object-fit:cover;background:#0a0e24;border:1px solid rgba(245,197,66,.4)}
+  .chipName{font-size:12px;font-weight:800;letter-spacing:.5px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #profileBtn{pointer-events:auto;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:1px;
+    color:#dfe6ff;background:rgba(30,40,80,.6);border:1px solid rgba(140,170,255,.3);border-radius:30px;padding:8px 13px;cursor:pointer}
+
+  /* ===== Controls setting ===== */
+  .setPanel{width:min(84vw,320px);margin:2px 0 12px}
+  .setTitle{font-size:10px;letter-spacing:3px;color:var(--dim);font-weight:700;margin-bottom:8px;text-align:center}
+  .ctrlOpts{display:flex;gap:8px}
+  .ctrlOpt{flex:1;pointer-events:auto;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.4px;
+    color:#c8cfe8;background:rgba(20,26,58,.5);border:1px solid rgba(140,170,255,.2);border-radius:10px;
+    padding:11px 8px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:7px}
+  .ctrlOpt .dot{width:12px;height:12px;border-radius:50%;border:2px solid rgba(140,170,255,.5);flex-shrink:0}
+  .ctrlOpt.active{border-color:var(--gold);color:#fff}
+  .ctrlOpt.active .dot{border-color:var(--gold);background:var(--gold);box-shadow:0 0 8px rgba(245,197,66,.7)}
+
   #whiteout{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9}
   #novaFlash{position:fixed;inset:0;opacity:0;pointer-events:none;z-index:9;
     background:radial-gradient(ellipse at 50% 50%, rgba(255,246,222,.96), rgba(245,197,66,.6) 52%, rgba(245,197,66,0) 100%)}
@@ -163,14 +191,14 @@
 
 <div id="hud">
   <div id="topRow">
-    <div class="stat"><div class="v" id="scoreV">0</div><div class="l">SCORE</div></div>
-    <div class="stat"><div class="v" id="distV">0</div><div class="l">DISTANCE</div></div>
-    <div class="stat star"><div class="v" id="dustV">0</div><div class="l">POUSSIÈRE</div></div>
+    <div class="stat"><div class="v" id="scoreV">0</div><div class="l" data-i18n="hud.score">SCORE</div></div>
+    <div class="stat"><div class="v" id="distV">0</div><div class="l" data-i18n="hud.distance">DISTANCE</div></div>
+    <div class="stat star"><div class="v" id="dustV">0</div><div class="l" data-i18n="hud.dust">POUSSIÈRE</div></div>
   </div>
   <div id="livesDots">●●●</div>
   <div id="energyWrap">
     <div id="energyBar"><div id="energyFill"></div></div>
-    <div id="energyHint">DOUBLE-TAP — NOVA BLAST</div>
+    <div id="energyHint" data-i18n="hud.novaHint">DOUBLE-TAP — NOVA BLAST</div>
   </div>
   <div id="levelToast">VITESSE ++</div>
 </div>
@@ -182,60 +210,81 @@
 <div id="hitFlash"></div>
 
 <div class="screen" id="menu">
+  <div id="menuTop">
+    <button id="profileBtn" data-i18n="profile.open">Profil</button>
+    <div class="pfChip" id="profileChip">
+      <img class="chipAvatar" id="chipAvatar" alt="avatar">
+      <span class="chipName" id="chipName"></span>
+    </div>
+    <div class="langSel" id="langSel">
+      <button class="langBtn" data-lang="fr">🇫🇷 FR</button>
+      <button class="langBtn" data-lang="en">🇬🇧 EN</button>
+      <button class="langBtn" data-lang="ko">🇰🇷 KR</button>
+    </div>
+  </div>
+
   <div class="brand">N O V A R Y S</div>
   <h1>SUPER NOVUS</h1>
   <div class="sunline"></div>
-  <div class="sub pulse">TRAVERSE LA GALAXIE</div>
-  <div class="rules">
+  <div class="sub pulse" data-i18n="menu.tagline">TRAVERSE LA GALAXIE</div>
+  <div class="rules" data-i18n-html="menu.rules">
     Glisse ton doigt — l'étoile répond <b>instantanément</b>.<br>
     Évite tout. Traverse la <b>poussière d'étoiles</b>.<br>
     3 vies. La galaxie accélère toutes les 30 s.
   </div>
 
   <div id="authBox">
-    <button class="big" id="playBtn">CONTINUER EN INVITÉ</button>
-    <button class="mini" id="walletBtn">🔗 CONNECTER LE WALLET</button>
+    <button class="big" id="playBtn" data-i18n="menu.playGuest">CONTINUER EN INVITÉ</button>
+    <button class="mini" id="walletBtn" data-i18n="menu.connectWallet">🔗 CONNECTER LE WALLET</button>
     <div id="loggedRow">
       <span class="who" id="whoTxt">CONNECTÉ</span>
-      <button class="mini" id="logoutBtn">DÉCONNEXION</button>
+      <button class="mini" id="logoutBtn" data-i18n="menu.logout">DÉCONNEXION</button>
     </div>
     <div class="authNote" id="walletState"></div>
   </div>
 
-  <div class="lbPanel" style="margin-top:22px">
-    <h3>CLASSEMENT GALACTIQUE</h3>
+  <div class="setPanel">
+    <div class="setTitle" data-i18n="controls.title">CONTRÔLES</div>
+    <div class="ctrlOpts" id="ctrlOpts">
+      <button class="ctrlOpt" data-mode="touch"><span class="dot"></span><span data-i18n="controls.touch">Toucher direct</span></button>
+      <button class="ctrlOpt" data-mode="joystick"><span class="dot"></span><span data-i18n="controls.joystick">Joystick virtuel</span></button>
+    </div>
+  </div>
+
+  <div class="lbPanel">
+    <h3 data-i18n="menu.leaderboard">CLASSEMENT GALACTIQUE</h3>
     <div class="lbTabs">
-      <button class="lbTab active" data-period="weekly">SEMAINE</button>
-      <button class="lbTab" data-period="monthly">MOIS</button>
+      <button class="lbTab active" data-period="weekly" data-i18n="menu.tabWeekly">SEMAINE</button>
+      <button class="lbTab" data-period="monthly" data-i18n="menu.tabMonthly">MOIS</button>
     </div>
     <div class="lbPrize" id="lbPrize">🏆 <b>TOP 1 · ≈$25</b> <span>payé en CRO — compétition hebdo</span></div>
-    <div id="lbListMenu"><div class="lbEmpty">Chargement…</div></div>
+    <div id="lbListMenu"><div class="lbEmpty" data-i18n="common.loading">Chargement…</div></div>
   </div>
 </div>
 
 <div class="screen" id="pauseScreen">
   <div class="brand">N O V A R Y S</div>
-  <h1 style="font-size:clamp(32px,8vw,60px)">PAUSE</h1>
+  <h1 style="font-size:clamp(32px,8vw,60px)" data-i18n="pause.title">PAUSE</h1>
   <div class="sunline"></div>
-  <button class="big" id="resumeBtn">REPRENDRE</button>
+  <button class="big" id="resumeBtn" data-i18n="pause.resume">REPRENDRE</button>
 </div>
 
 <div class="screen" id="gameover">
   <div class="brand">N O V A R Y S</div>
-  <h1>EXTINCTION</h1>
+  <h1 data-i18n="gameover.title">EXTINCTION</h1>
   <div class="sunline"></div>
-  <div id="newRecordBadge">✦ NOUVEAU RECORD ✦</div>
-  <div class="statLine">SCORE <b id="finalScore">0</b></div>
-  <div class="statLine">DISTANCE <b id="finalDist">0</b></div>
-  <div class="statLine gold">POUSSIÈRE ★ <b id="finalDust">0</b></div>
-  <div class="rankLine" id="weeklyRank">CLASSEMENT SEMAINE · <b>#—</b></div>
-  <div class="rankLine" id="monthlyRank">CLASSEMENT MOIS · <b>#—</b></div>
-  <div id="bestScore">RECORD · 0</div>
-  <div id="seedLine">SEED · —</div>
+  <div id="newRecordBadge" data-i18n="gameover.newRecord">✦ NOUVEAU RECORD ✦</div>
+  <div class="statLine"><span data-i18n="gameover.score">SCORE</span> <b id="finalScore">0</b></div>
+  <div class="statLine"><span data-i18n="gameover.distance">DISTANCE</span> <b id="finalDist">0</b></div>
+  <div class="statLine gold"><span data-i18n="gameover.dust">POUSSIÈRE</span> ★ <b id="finalDust">0</b></div>
+  <div class="rankLine" id="weeklyRank"></div>
+  <div class="rankLine" id="monthlyRank"></div>
+  <div id="bestScore"></div>
+  <div id="seedLine"></div>
   <div id="saveState" class="no"></div>
   <button class="big bigbang" id="bigBangBtn">🌌 BIG BANG #1 — 10 CRO</button>
-  <div id="bigBangCount">BIG BANGS · 0/3</div>
-  <button class="mini" id="menuBtn">RETOUR AU MENU</button>
+  <div id="bigBangCount"></div>
+  <button class="mini" id="menuBtn" data-i18n="gameover.menu">RETOUR AU MENU</button>
 </div>
 
 <script type="module" src="/src/main.ts"></script>
