@@ -32,7 +32,7 @@ export class ObstacleManager {
     this.rockGeo = g;
     this.rockCount = 80;
     this.rocks = new THREE.InstancedMesh(g,
-      new THREE.MeshStandardMaterial({map:TEX.rock, roughness:.92, metalness:.05, emissive:0x1a140c, emissiveIntensity:.62}),
+      new THREE.MeshStandardMaterial({map:TEX.rock, roughness:.9, metalness:.08, emissive:0x0c0e18, emissiveIntensity:.55}),
       this.rockCount);
     this.rocks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.rocks.frustumCulled = false;

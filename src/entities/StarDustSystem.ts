@@ -67,8 +67,8 @@ export class StarDustSystem {
         c.pts.position.addScaledVector(dir, (7-d)*7*dt);
       }
       if (d < c.r + player.r){
-        this.particles.burst(c.pts.position, 22, 20, 2.2, 0xffe9a0, 0.6);
-        this.particles.burst(c.pts.position, 10, 10, 1.2, 0xffffff, 0.6);
+        this.particles.burst(c.pts.position, 30, 24, 2.4, 0xffe9a0, 0.55);
+        this.particles.burst(c.pts.position, 12, 12, 1.3, 0xffffff, 0.5);
         this.audio.ping();
         if (navigator.vibrate) navigator.vibrate(10);
         game.collectDust();
