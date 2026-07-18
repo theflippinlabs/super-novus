@@ -1,5 +1,5 @@
 // SUPER NOVUS — submit-score Edge Function (Deno / Supabase)
-// redeploy: v3 — MUST deploy with verify_jwt=false (see supabase/config.toml).
+// redeploy: v4 — robust signature verification (EOA recover + EIP-1271/6492).
 // Verifies an EIP-191 signature, rate-limits, records the submission, and
 // upserts the wallet's best score into the current WEEKLY and MONTHLY periods.
 // Deploy: supabase functions deploy submit-score --no-verify-jwt
@@ -11,7 +11,7 @@
 // of scope. Guest players (no wallet) cannot submit and never appear in ranks.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-import { verifyMessage } from "https://esm.sh/viem@2.9.0";
+import { createPublicClient, http, recoverMessageAddress } from "https://esm.sh/viem@2.9.0";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -21,6 +21,45 @@ const CORS = {
 
 const RATE_LIMIT_SECONDS = 30;
 const MAX_DIST = 200_000;
+// Cronos RPC — used only to verify smart-contract-wallet signatures (EIP-1271).
+const RPC_URL = Deno.env.get("CRONOS_RPC_URL") ?? "https://evm.cronos.org";
+
+/** Verify an EIP-191 personal_sign signature, supporting BOTH externally-owned
+    accounts and smart-contract wallets:
+      1) EOA  — recover the signer offline (ecrecover) and compare. No network.
+      2) Smart account (EIP-1271 / EIP-6492) — verify on-chain via the Cronos RPC.
+         Many mobile wallets are smart accounts whose signatures cannot be checked
+         with plain ecrecover; skipping this rejected otherwise-valid submissions.
+    Returns the recovered EOA address (or "") alongside the verdict, for honest
+    error reporting — recovered addresses are public information. */
+async function verifySignature(
+  wallet: string,
+  message: string,
+  signature: `0x${string}`,
+): Promise<{ valid: boolean; recovered: string }> {
+  const expected = wallet.toLowerCase();
+  let recovered = "";
+  try {
+    recovered = (await recoverMessageAddress({ message, signature })).toLowerCase();
+  } catch (e) {
+    console.error("recoverMessageAddress failed:", e);
+  }
+  if (recovered && recovered === expected) return { valid: true, recovered };
+
+  // Fallback: smart-contract wallet signature (EIP-1271 / EIP-6492) on Cronos.
+  try {
+    const client = createPublicClient({ transport: http(RPC_URL) });
+    const ok = await client.verifyMessage({
+      address: wallet as `0x${string}`,
+      message,
+      signature,
+    });
+    if (ok) return { valid: true, recovered };
+  } catch (e) {
+    console.error("on-chain (EIP-1271) verify failed:", e);
+  }
+  return { valid: false, recovered };
+}
 
 /** Monday 00:00 UTC of the week containing d, as YYYY-MM-DD. */
 function weekStartUTC(d: Date): string {
@@ -57,13 +96,13 @@ Deno.serve(async (req) => {
   if (dist > MAX_DIST) return json({ error: "dist bound" }, 400);
   if (score > dist * 3 + dust * 150 + 5000) return json({ error: "score bound" }, 400);
 
-  // 3) signature must match wallet
+  // 3) signature must match wallet (EOA or smart-contract wallet)
   const message = `SUPER NOVUS score:${score} dist:${dist} dust:${dust} ts:${ts}`;
-  let valid = false;
-  try {
-    valid = await verifyMessage({ address: wallet as `0x${string}`, message, signature: signature as `0x${string}` });
-  } catch { valid = false; }
-  if (!valid) return json({ error: "signature invalid" }, 401);
+  const { valid, recovered } = await verifySignature(wallet, message, signature as `0x${string}`);
+  if (!valid) {
+    // Honest, specific error (public addresses only) — never a fake "JWT" problem.
+    return json({ error: "signature invalid", recovered: recovered || null, expected: wallet.toLowerCase() }, 401);
+  }
 
   const supabase = createClient(
     Deno.env.get("SUPABASE_URL")!,
