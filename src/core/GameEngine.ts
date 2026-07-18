@@ -439,6 +439,7 @@ export class GameEngine {
     this.dust++;
     this.score += 100;
     this.ui.floatScore("+100", "dust");
+    this.shake = Math.max(this.shake, 0.16);   // subtle satisfying collect kick
     // STAR ENERGY charges only from dust; fills at ~12 clusters.
     if (this.energy < STAR_ENERGY_MAX){
       this.energy = Math.min(STAR_ENERGY_MAX, this.energy + STAR_DUST_ENERGY);

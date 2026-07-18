@@ -110,6 +110,7 @@ export class Environment {
     const sd = new THREE.Points(this.speedGeo, new THREE.PointsMaterial({color:0xbcd0ff, size:0.46, transparent:true, opacity:.62, depthWrite:false}));
     sd.frustumCulled = false;
     scene.add(sd);
+    this.dustMat = sd.material;   // scaled with speed for a stronger streak feel
 
     this.DUST2_N = 180; this.DUST2_BOX = 340;
     this.dust2Geo = new THREE.BufferGeometry();
@@ -164,6 +165,12 @@ export class Environment {
     this.group.position.copy(player.pos);
     this.group.rotation.y += dt*0.002;
     this.lmFlare.material.rotation += dt*0.05;
+
+    // Speed streaks: the near cosmic dust grows + brightens with velocity, so the
+    // faster the run the stronger the sense of motion (visual only).
+    const spd01 = Math.max(0, Math.min(1, (speed - CFG.baseSpeed) / (CFG.maxSpeed - CFG.baseSpeed)));
+    this.dustMat.size = 0.42 + spd01 * 0.55;
+    this.dustMat.opacity = 0.54 + spd01 * 0.2;
 
     if (running && player.pos.z < this.nextDecorZ){
       // Weighted composition: mostly open space, distant planets for depth,
