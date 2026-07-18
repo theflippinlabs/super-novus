@@ -1,0 +1,73 @@
+/* Payouts — prize distribution client (owner-approved model).
+   The winner is selected automatically server-side (sn_payouts ledger). Here
+   the treasury owner lists pending payouts and sends each prize FROM THEIR OWN
+   wallet; the tx is then recorded via the record-payout Edge Function.
+   No private key is ever held by the app. */
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import {
+  SUPABASE_URL_DEFAULT, SUPABASE_ANON_KEY_DEFAULT,
+  TREASURY_ADDRESS, WEEKLY_PRIZE_CRO, MONTHLY_PRIZE_CRO,
+} from "../config";
+import { WalletManager } from "./WalletManager";
+
+export interface Payout {
+  id: number;
+  period_type: "weekly" | "monthly";
+  period_start: string;
+  wallet: string;
+  best_score: number;
+  status: string;
+  tx_hash: string | null;
+}
+
+export class Payouts {
+  private client: SupabaseClient | null = null;
+
+  constructor(private wallet: WalletManager) {
+    const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || SUPABASE_URL_DEFAULT;
+    const key = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || SUPABASE_ANON_KEY_DEFAULT;
+    if (url && key) this.client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  }
+
+  get available(): boolean { return this.client !== null; }
+
+  isTreasury(): boolean {
+    const a = this.wallet.getAddress();
+    return !!a && a.toLowerCase() === TREASURY_ADDRESS.toLowerCase();
+  }
+
+  defaultPrizeCRO(period: "weekly" | "monthly"): number {
+    return period === "weekly" ? WEEKLY_PRIZE_CRO : MONTHLY_PRIZE_CRO;
+  }
+
+  async listPending(): Promise<Payout[]> {
+    if (!this.client) return [];
+    const { data, error } = await this.client
+      .from("sn_payouts").select("*").eq("status", "pending")
+      .order("period_start", { ascending: false });
+    if (error) { console.error("[Payouts] read failed:", error.message, error); return []; }
+    return (data ?? []) as Payout[];
+  }
+
+  /** Send the prize from the connected treasury wallet, then record the tx. */
+  async pay(p: Payout, amountCRO: number): Promise<string> {
+    if (!this.isTreasury()) throw new Error("Connecte le wallet trésorerie");
+    const tx = await this.wallet.payCRO(p.wallet, amountCRO);
+    await this.record(p, tx);
+    return tx;
+  }
+
+  private async record(p: Payout, tx: string): Promise<void> {
+    if (!this.client) return;
+    const addr = this.wallet.getAddress();
+    if (!addr) return;
+    const message = `SUPER NOVUS payout ${p.period_type}:${p.period_start} tx:${tx}`;
+    let signature: string;
+    try { signature = await this.wallet.signMessage(message); }
+    catch (e) { console.error("[Payouts] record aborted — signature failed:", e); return; }
+    const { error } = await this.client.functions.invoke("record-payout", {
+      body: { period_type: p.period_type, period_start: p.period_start, tx_hash: tx, wallet: addr, signature },
+    });
+    if (error) console.error("[Payouts] record failed (tx sent, status not updated):", error.message, error);
+  }
+}

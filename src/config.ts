@@ -96,6 +96,14 @@ export const BIG_BANG_INVULN = 3.0;                   // seconds of invulnerabil
 // Cronos treasury that RECEIVES the CRO payment.
 export const BIG_BANG_RECIPIENT = "0x277B7CAD86D0f56Ae547533934dceA365ac7D7Bf";
 
+// --- Prize payouts (owner-approved, sent from the treasury wallet) ---
+// Same treasury both receives Big Bang CRO and sends the weekly/monthly prizes.
+export const TREASURY_ADDRESS = BIG_BANG_RECIPIENT;
+// Default CRO amount pre-filled in the admin payout panel (editable per payout;
+// e.g. the CRO equivalent of the $50 weekly prize). 0 = owner enters it.
+export const WEEKLY_PRIZE_CRO = 0;
+export const MONTHLY_PRIZE_CRO = 0;
+
 // --- Wallet / chain ---
 export const SUPPORTED_CHAIN_ID = 25;  // Cronos
 export const OPTIONAL_CHAIN_IDS = [1];

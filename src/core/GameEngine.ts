@@ -21,6 +21,8 @@ import { UIManager } from "../ui/UIManager";
 import { DebugOverlay } from "../ui/DebugOverlay";
 import { WalletManager } from "../net/WalletManager";
 import { Leaderboard } from "../net/Leaderboard";
+import { Payouts } from "../net/Payouts";
+import { AdminPanel } from "../ui/AdminPanel";
 import {
   STAR_DUST_ENERGY, STAR_ENERGY_MAX,
   NOVA_DAMAGE_SCORE,
@@ -75,6 +77,11 @@ export class GameEngine {
     // Zero cost unless ?debug=1: no DOM, no measurement, no global otherwise.
     this.debug = new URLSearchParams(location.search).get("debug") === "1" ? new DebugOverlay() : null;
     if (this.debug) (window as any).__game = this; // debug-only inspection handle
+    // Owner prize-payout console (?admin=1) — zero cost otherwise.
+    if (new URLSearchParams(location.search).get("admin") === "1"){
+      this.payouts = new Payouts(this.wallet);
+      this.admin = new AdminPanel(this.payouts, this.wallet);
+    }
 
     this.running = false; this.paused = false;
     this.score = 0; this.dist = 0; this.dust = 0; this.best = 0;
