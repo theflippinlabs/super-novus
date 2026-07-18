@@ -24,6 +24,16 @@ function extractErr(detail: string): string {
   return detail.slice(0, 140);
 }
 
+/** When the server rejects a signature it returns the recovered vs expected
+    address — surface a short, non-sensitive hint so a mismatch is obvious. */
+function recoveredHint(detail: string): string {
+  try {
+    const j = JSON.parse(detail);
+    if (j && j.recovered && j.expected) return ` (récupéré ${shortAddr(j.recovered)} ≠ attendu ${shortAddr(j.expected)})`;
+  } catch { /* not JSON */ }
+  return "";
+}
+
 /** Current period boundaries in UTC — must match the Edge Function exactly.
     Monday 00:00 UTC for weekly, the 1st for monthly. */
 export function weekStartUTC(d: Date = new Date()): string {
@@ -231,9 +241,14 @@ export class Leaderboard {
       let detail = "";
       try { detail = await (error as any).context?.text?.(); } catch { /* ignore */ }
       const status = (error as any).context?.status as number | undefined;
+      // A 401 has TWO possible causes: the gateway rejecting a non-JWT key, OR our
+      // function rejecting a bad signature (it returns {error:"signature invalid"}).
+      // Distinguish them by reading the body so we never mislabel one as the other.
+      const sigInvalid = /signature\s*invalid/i.test(detail || "");
       // Surface the EXACT cause (do not hide it) — this reaches the Game Over screen.
       this.lastSubmitReason =
         status === 404 ? "Serveur de scores non déployé (submit-score 404)"
+        : sigInvalid ? `Signature refusée par le serveur${recoveredHint(detail)} — réessaie et signe le message dans ton wallet.`
         : status === 401 ? "Fonction protégée par JWT — redéploie avec --no-verify-jwt (401)"
         : status === 403 ? "Accès refusé (403) — vérifie la clé Supabase / le déploiement"
         : status === 429 ? "Trop de soumissions — patiente ~30 s (429)"
