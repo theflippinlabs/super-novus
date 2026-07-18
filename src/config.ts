@@ -126,7 +126,12 @@ export const LOCAL_SAVE_KEY = "super-novus:best";
 // designed to ship in the frontend, protected by RLS). VITE_SUPABASE_URL /
 // VITE_SUPABASE_ANON_KEY env vars override these defaults when set.
 export const SUPABASE_URL_DEFAULT = "https://xmjqrnlmcvrltjzuptao.supabase.co";
-export const SUPABASE_ANON_KEY_DEFAULT = "sb_publishable_4EM-qnipoN_8LZJhVHLv1A_Cigm8DlR";
+// Legacy anon key (a valid project JWT) — required because the Edge Functions run
+// with the default JWT verification ON, and the newer sb_publishable_ key is NOT
+// a JWT (the gateway 401'd every submit-score call). This anon JWT passes gateway
+// verification; the functions still do their own EIP-191 wallet-signature checks.
+// Public by design (shipped in the client, protected by RLS).
+export const SUPABASE_ANON_KEY_DEFAULT = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InhtanFybmxtY3ZybHRqenVwdGFvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODQzNTA1MDYsImV4cCI6MjA5OTkyNjUwNn0.je945b1wFgT5GIng82Br5SogeMGV2f6WPzWuHbCwJSo";
 export const LEADERBOARD_PERIODS = ["weekly", "monthly"] as const;
 export type LeaderboardPeriod = (typeof LEADERBOARD_PERIODS)[number];
 
