@@ -147,6 +147,24 @@
     background:linear-gradient(180deg,#c7f5cf,#63d492 58%,#2fae62);
     box-shadow:0 8px 20px rgba(60,200,120,.38), 0 1px 0 rgba(255,255,255,.35) inset}
   button.mini.save:disabled{opacity:.6;filter:grayscale(.3);cursor:default}
+  /* Connect Wallet — the recommended path: larger, glowing cosmic CTA with a
+     premium star badge. Continue-as-Guest stays the gold primary above it. */
+  button.mini.walletCta{font-size:14px;letter-spacing:2px;padding:15px 32px;border-radius:15px;
+    color:#f2f5ff;font-weight:800;overflow:visible;
+    background:linear-gradient(180deg,rgba(120,140,245,.92),rgba(84,78,214,.82) 52%,rgba(96,58,190,.85));
+    border:1px solid rgba(170,185,255,.6);
+    box-shadow:0 11px 28px rgba(70,80,200,.5), 0 0 22px rgba(130,130,255,.34), 0 1px 0 rgba(255,255,255,.24) inset;
+    animation:walletGlow 3.2s ease-in-out infinite}
+  button.mini.walletCta::after{content:"★";position:absolute;top:-8px;right:-8px;width:24px;height:24px;
+    display:flex;align-items:center;justify-content:center;border-radius:50%;font-size:12px;color:#3a2600;
+    background:linear-gradient(180deg,#FFF0BE,#F0B429);box-shadow:0 3px 10px rgba(240,180,40,.6);
+    border:1.5px solid rgba(255,255,255,.7)}
+  button.mini.walletCta:hover{border-color:rgba(190,200,255,.85);
+    box-shadow:0 13px 32px rgba(80,90,215,.58), 0 0 28px rgba(150,150,255,.44), 0 1px 0 rgba(255,255,255,.3) inset}
+  button.mini.walletCta:active{transform:scale(.97)}
+  @keyframes walletGlow{0%,100%{box-shadow:0 11px 28px rgba(70,80,200,.5), 0 0 20px rgba(130,130,255,.3), 0 1px 0 rgba(255,255,255,.24) inset}
+    50%{box-shadow:0 11px 30px rgba(80,90,215,.56), 0 0 30px rgba(150,150,255,.5), 0 1px 0 rgba(255,255,255,.28) inset}}
+  @media (prefers-reduced-motion: reduce){button.mini.walletCta{animation:none}}
   #loggedRow{display:none;flex-direction:row;gap:10px;align-items:center}
   #loggedRow .who{font-size:12px;letter-spacing:2px;color:#bfe0a8;font-weight:700}
   .authNote{font-size:9.5px;letter-spacing:1px;color:#5a6288}
@@ -181,6 +199,53 @@
   .lbPrize{font-size:10px;letter-spacing:1.5px;color:var(--gold);font-weight:700;margin:0 0 8px;text-align:center;line-height:1.55}
   .lbPrize span{color:#c8cfe8;font-weight:600}
 
+  /* ===== Podium (top 3) — gold/silver/bronze pedestals, avatars, idle float ===== */
+  .lbPanel{padding:13px 15px 11px}
+  .podium{display:flex;justify-content:center;align-items:flex-end;gap:10px;margin:10px 2px 2px}
+  .pod{flex:1;max-width:106px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
+    cursor:pointer}
+  .podTop{display:flex;flex-direction:column;align-items:center;gap:3px;margin-bottom:3px;
+    animation:podFloat 3.2s ease-in-out infinite;will-change:transform}
+  .pod2 .podTop{animation-delay:.5s}
+  .pod3 .podTop{animation-delay:1s}
+  @keyframes podFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-4px)}}
+  .podCrown{font-size:18px;line-height:1;margin-bottom:1px;animation:crownBob 2.6s ease-in-out infinite;
+    filter:drop-shadow(0 0 8px rgba(245,197,66,.7))}
+  @keyframes crownBob{0%,100%{transform:translateY(0) rotate(-5deg)}50%{transform:translateY(-3px) rotate(5deg)}}
+  .podAvatarWrap{position:relative}
+  .podAvatar{border-radius:50%;object-fit:cover;background:#0a0e24;display:block}
+  .podMedal{position:absolute;bottom:-5px;right:-7px;font-size:16px;line-height:1;
+    filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+  .podName{font-size:10px;font-weight:800;letter-spacing:.2px;color:#eaf0ff;max-width:98px;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap;margin-top:3px}
+  .podScore{font-size:12.5px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums;letter-spacing:.3px}
+  .podBase{width:100%;flex-shrink:0;border-radius:10px 10px 3px 3px;display:flex;align-items:center;justify-content:center;
+    position:relative;border-bottom:2px solid rgba(0,0,0,.35);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.4), inset 0 -6px 12px rgba(0,0,0,.28)}
+  .podRank{font-size:22px;font-weight:900;color:rgba(8,6,18,.42);text-shadow:0 1px 0 rgba(255,255,255,.25)}
+  /* Gold #1 — tallest, centre */
+  .pod1 .podAvatar{width:58px;height:58px;border:2.5px solid #FFE59A;box-shadow:0 0 20px rgba(245,197,66,.65)}
+  .pod1 .podBase{height:52px;background:linear-gradient(180deg,#FFF0BE 0%,#F5C542 45%,#C88A11 100%);
+    box-shadow:inset 0 2px 0 rgba(255,255,255,.55), inset 0 -6px 12px rgba(120,80,0,.3), 0 0 22px rgba(245,197,66,.35)}
+  /* Silver #2 */
+  .pod2 .podAvatar{width:48px;height:48px;border:2px solid #e2e7f5;box-shadow:0 0 15px rgba(200,212,245,.5)}
+  .pod2 .podBase{height:36px;background:linear-gradient(180deg,#f4f6fc 0%,#cdd4e6 45%,#8b93b0 100%)}
+  /* Bronze #3 */
+  .pod3 .podAvatar{width:48px;height:48px;border:2px solid #eab182;box-shadow:0 0 15px rgba(216,138,78,.48)}
+  .pod3 .podBase{height:26px;background:linear-gradient(180deg,#f3c69e 0%,#d98a4e 45%,#9c6033 100%)}
+  .pod.empty{opacity:.45}
+  .pod.empty .podAvatar{filter:grayscale(.6) brightness(.7)}
+  .pod.me .podName{color:var(--gold);text-shadow:0 0 10px rgba(245,197,66,.6)}
+  .podEmpty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
+    min-height:132px;color:#8b93b8;font-size:11px;letter-spacing:1.5px;font-weight:600;text-align:center;padding:0 20px}
+  .podEmojiTrophy{font-size:30px;filter:drop-shadow(0 0 12px rgba(245,197,66,.5));animation:crownBob 2.6s ease-in-out infinite}
+  .lbViewAll{margin-top:9px;pointer-events:auto;font-family:inherit;font-size:10px;letter-spacing:1.8px;
+    font-weight:800;color:#9aa6d4;background:none;border:none;cursor:pointer;width:100%;padding:3px;
+    transition:color .2s}
+  .lbViewAll:hover{color:#cdd6ff}
+  .lbViewAll:active{transform:scale(.98)}
+  @media (prefers-reduced-motion: reduce){.podTop,.podCrown{animation:none}}
+
   /* ===== Menu header — one toolbar, three controls, identical design ===== */
   #menuTop{position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) + 58px);
     display:flex;justify-content:flex-end;align-items:center;gap:8px;z-index:14;pointer-events:none;
@@ -197,9 +262,16 @@
     background-size:cover;background-position:center;background-repeat:no-repeat}
   .hIcon:active{transform:scale(.92)}
   .hIcon.off{opacity:.5}
-  /* Default profile avatar = the official Super Novus icon until one is uploaded */
-  #profileIcon{background-image:url("/appicon.png")}
-  #profileIcon.hasAvatar{border-color:rgba(245,197,66,.6)}
+  /* Profile button — reads unmistakably as "my profile": circular identity with a
+     glowing ring. Guest → user silhouette; connected → avatar in a gold ring. */
+  #profileIcon{background-image:url("/appicon.png");position:relative;overflow:visible;background-size:cover;background-position:center}
+  #profileIcon::after{content:"";position:absolute;inset:-2px;border-radius:50%;pointer-events:none;
+    box-shadow:0 0 0 2px rgba(150,170,255,.28), 0 0 13px rgba(120,150,255,.4);transition:box-shadow .25s}
+  #profileIcon.guest{background-size:66%;background-position:center 60%;
+    background-color:rgba(24,30,64,.85);background-repeat:no-repeat}
+  #profileIcon.hasAvatar{background-size:cover}
+  #profileIcon.hasAvatar::after{box-shadow:0 0 0 2px rgba(245,197,66,.72), 0 0 16px rgba(245,197,66,.5)}
+  #profileIcon:active{transform:scale(.92)}
   .langSel{gap:2px;padding:0 4px}
   .langBtn{pointer-events:auto;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:.2px;
     color:#9aa6d4;background:none;border:none;border-radius:13px;padding:8px 6px;cursor:pointer;transition:color .2s,background .2s}
@@ -293,7 +365,7 @@
 
   <div id="authBox">
     <button class="big" id="playBtn" data-i18n="menu.playGuest">CONTINUER EN INVITÉ</button>
-    <button class="mini" id="walletBtn" data-i18n="menu.connectWallet">🔗 CONNECTER LE WALLET</button>
+    <button class="mini walletCta" id="walletBtn" data-i18n="menu.connectWallet">🔗 CONNECTER LE WALLET</button>
     <div id="walletStatus"><span class="wDot"></span><span id="wNick"></span></div>
     <div class="authNote" id="walletState"></div>
   </div>
@@ -308,11 +380,12 @@
 
   <div class="lbPanel">
     <div class="lbTabs">
-      <button class="lbTab active" data-period="weekly" data-i18n="menu.tabWeekly">SEMAINE</button>
-      <button class="lbTab" data-period="monthly" data-i18n="menu.tabMonthly">MOIS</button>
+      <button class="lbTab active" data-period="weekly" data-i18n="menu.tabWeekly">COMPÉTITION HEBDO</button>
+      <button class="lbTab" data-period="monthly" data-i18n="menu.tabMonthly">COMPÉTITION MENSUELLE</button>
     </div>
     <div class="lbPrize" id="lbPrize">🏆 <b>TOP 1 · ≈$25</b> <span>payé en CRO — compétition hebdo</span></div>
-    <div id="lbListMenu"><div class="lbEmpty" data-i18n="common.loading">Chargement…</div></div>
+    <div id="podium" class="podium"></div>
+    <button class="lbViewAll" id="lbViewAll" data-i18n="lb.viewFull">VOIR LE CLASSEMENT COMPLET →</button>
   </div>
 </div>
 

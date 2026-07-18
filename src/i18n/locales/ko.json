@@ -11,8 +11,8 @@
   "menu.connectWallet": "🔗 지갑 연결",
   "menu.logout": "로그아웃",
   "menu.leaderboard": "은하 순위표",
-  "menu.tabWeekly": "주간",
-  "menu.tabMonthly": "월간",
+  "menu.tabWeekly": "주간 대회",
+  "menu.tabMonthly": "월간 대회",
 
   "hud.score": "점수",
   "hud.distance": "거리",
@@ -74,6 +74,15 @@
 
   "lb.empty": "이번 기간 점수 없음 — 첫 주자가 되세요!",
   "lb.soon": "온라인 순위표가 곧 제공됩니다",
+  "lb.title": "은하 순위표",
+  "lb.viewFull": "전체 순위 보기 →",
+  "lb.searchPlaceholder": "플레이어 검색…",
+  "lb.colPlayer": "플레이어",
+  "lb.colScore": "점수",
+  "lb.colDist": "거리",
+  "lb.colDust": "먼지",
+  "lb.you": "나",
+  "lb.noMatch": "플레이어를 찾을 수 없습니다",
 
   "profile.title": "프로필",
   "profile.open": "프로필",

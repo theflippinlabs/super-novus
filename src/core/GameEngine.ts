@@ -26,6 +26,7 @@ import { Payouts } from "../net/Payouts";
 import { AdminPanel } from "../ui/AdminPanel";
 import { Profile } from "../net/Profile";
 import { ProfilePanel } from "../ui/ProfilePanel";
+import { LeaderboardPage } from "../ui/LeaderboardPage";
 import { Joystick } from "../input/Joystick";
 import { Diagnostics } from "../ui/Diagnostics";
 import { i18n } from "../i18n";
@@ -99,7 +100,9 @@ export class GameEngine {
     }
     // Player profile dashboard (avatar + nickname + stats/history/rewards).
     this.profilePanel = new ProfilePanel(this.profile, this.wallet, this.leaderboard);
-    this.profilePanel.setIdentityListener(() => this._refreshIdentity());
+    this.profilePanel.setIdentityListener(() => { this._refreshIdentity(); this._refreshBoards(); });
+    // Full competitive leaderboard, opened by tapping the home-screen podium.
+    this.leaderboardPage = new LeaderboardPage(this.leaderboard, this.wallet, this.profile);
     // Score-pipeline diagnostic (?diag=1) — zero cost otherwise.
     if (new URLSearchParams(location.search).get("diag") === "1")
       this.diagnostics = new Diagnostics(this.leaderboard, this.wallet);
@@ -160,6 +163,7 @@ export class GameEngine {
       // "Save score" tap — never on a silent reconnect / tab resume.
     });
     refresh();
+    this._refreshIdentity();       // guest silhouette in the profile button from boot
     this.leaderboard.diagnose();   // logs exact Supabase connectivity status on boot
     await this._refreshBoards();
     this._refreshPrizePool();      // live weekly/monthly prize pool on the menu board
@@ -232,14 +236,23 @@ export class GameEngine {
   /** Show the avatar + nickname identity (home chip + auth line). Never the address. */
   async _refreshIdentity(){
     const addr = this.wallet.getAddress();
-    if (!addr){ this.ui.setProfileIdentity(false, null, null); return; }
+    if (!addr){ this.ui.setProfileIdentity(false, null, null, null); return; }
     const cached = this.profile.cachedIdentity(addr);
-    // Pass only a CUSTOM avatar; null falls back to the official icon (CSS default).
-    this.ui.setProfileIdentity(true, cached.avatar, cached.nickname);
+    // Connected → avatar (custom else deterministic galaxy) in a gold profile ring.
+    this.ui.setProfileIdentity(true, addr, cached.avatar, cached.nickname);
     const row = await this.profile.get();
     const nick = row?.nickname ?? cached.nickname ?? null;
-    this.ui.setProfileIdentity(true, row?.avatar_url ?? cached.avatar ?? null, nick);
+    this.ui.setProfileIdentity(true, addr, row?.avatar_url ?? cached.avatar ?? null, nick);
     this.ui.setAuth(addr, this.wallet.available, this.wallet.getChainId(), nick);
+  }
+
+  /** The current player's own identity for their podium/board row (chosen name +
+      avatar), or null when playing as guest. Never exposes the address. */
+  _meIdentity(){
+    const addr = this.wallet.getAddress();
+    if (!addr) return null;
+    const id = this.profile.cachedIdentity(addr);
+    return { wallet: addr, nickname: id.nickname, avatar: id.avatar };
   }
 
   /** After an explicit connect: show identity, and prompt for a nickname if none. */
@@ -254,13 +267,12 @@ export class GameEngine {
   /** Fetch the current period's board once and render it into both panels.
       Explicit, non-blocking state when the online leaderboard isn't configured. */
   async _refreshBoards(){
-    const me = this.wallet.getAddress();
-    if (!this.leaderboard.available){
-      this.ui.boardMessage(this.ui.lbListMenu, "Classement en ligne bientôt disponible");
-      return;
-    }
-    const rows = await this.leaderboard.top(this.lbPeriod, 3);   // compact one-screen preview
-    this.ui.renderBoard(this.ui.lbListMenu, rows, me);
+    const meId = this._meIdentity();
+    // Compact one-screen preview = the top-3 podium. Empty (or unconfigured) →
+    // neutral pedestals. The full ranking lives on the tap-through LeaderboardPage.
+    if (!this.leaderboard.available){ this.ui.renderPodium([], meId); return; }
+    const rows = await this.leaderboard.top(this.lbPeriod, 3);
+    this.ui.renderPodium(rows, meId);
   }
 
   _bindInput(){
@@ -376,6 +388,10 @@ export class GameEngine {
 
     // Profile — open the dashboard from the circular header icon.
     this.ui.profileIcon.addEventListener("click", () => this._openProfile());
+    // Podium is a preview — tapping it (or "view all") opens the full leaderboard.
+    const openLb = () => this.leaderboardPage.open(this.lbPeriod);
+    this.ui.podium.addEventListener("click", openLb);
+    document.getElementById("lbViewAll")?.addEventListener("click", openLb);
     // Menu header music toggle (mirrors the in-game HUD button).
     this.ui.menuMusicBtn.addEventListener("click", () => {
       const on = this.music.toggle();

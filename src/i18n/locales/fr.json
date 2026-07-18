@@ -11,8 +11,8 @@
   "menu.connectWallet": "🔗 CONNECTER LE WALLET",
   "menu.logout": "DÉCONNEXION",
   "menu.leaderboard": "CLASSEMENT GALACTIQUE",
-  "menu.tabWeekly": "SEMAINE",
-  "menu.tabMonthly": "MOIS",
+  "menu.tabWeekly": "COMPÉTITION HEBDO",
+  "menu.tabMonthly": "COMPÉTITION MENSUELLE",
 
   "hud.score": "SCORE",
   "hud.distance": "DISTANCE",
@@ -74,6 +74,15 @@
 
   "lb.empty": "Aucun score cette période — sois le premier !",
   "lb.soon": "Classement en ligne bientôt disponible",
+  "lb.title": "CLASSEMENT GALACTIQUE",
+  "lb.viewFull": "VOIR LE CLASSEMENT COMPLET →",
+  "lb.searchPlaceholder": "Rechercher un joueur…",
+  "lb.colPlayer": "JOUEUR",
+  "lb.colScore": "SCORE",
+  "lb.colDist": "DIST",
+  "lb.colDust": "POUSS.",
+  "lb.you": "TOI",
+  "lb.noMatch": "Aucun joueur trouvé",
 
   "profile.title": "PROFIL",
   "profile.open": "Profil",
