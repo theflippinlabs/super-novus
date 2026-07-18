@@ -2,6 +2,7 @@
    HUD/stats/toast/flash logic identical to the validated build. */
 import { shortAddr } from "../net/WalletManager";
 import type { BoardRow } from "../net/Leaderboard";
+import type { PoolInfo } from "../net/PrizePool";
 import { SUPPORTED_CHAIN_ID } from "../config";
 
 const $ = (id: string): HTMLElement => {
@@ -34,6 +35,7 @@ export class UIManager {
   whoTxt = $("whoTxt");
   logoutBtn = $("logoutBtn") as HTMLButtonElement;
   saveState = $("saveState");
+  lbPrize = $("lbPrize");
   lbListMenu = $("lbListMenu");
   bigBangBtn = $("bigBangBtn") as HTMLButtonElement;
   bigBangCount = $("bigBangCount");
@@ -182,6 +184,28 @@ export class UIManager {
   /** Explicit, non-blocking message in a board (e.g. server not configured). */
   boardMessage(el: HTMLElement, msg: string): void {
     el.innerHTML = `<div class="lbEmpty">${msg}</div>`;
+  }
+
+  /** Render the live prize pool for the active tab. USD amounts are guaranteed;
+      CRO equivalents are shown as "≈" (they depend on the price at award time).
+      Monthly also shows the 30% Community Bonus from this month's Big Bangs. */
+  setPrizePool(period: "weekly" | "monthly", pool: PoolInfo | null): void {
+    const el = this.lbPrize;
+    if (!pool) { el.innerHTML = `🏆 <span>chargement de la cagnotte…</span>`; return; }
+    const cro = (n: number) => n.toLocaleString("fr-FR", { maximumFractionDigits: n < 100 ? 2 : 0 });
+    if (period === "weekly") {
+      const eq = pool.weeklyCRO !== null ? ` (≈${cro(pool.weeklyCRO)} CRO)` : "";
+      el.innerHTML =
+        `🏆 <b>TOP 1 · ≈$${pool.weeklyUsd}</b> <span>payé en CRO${eq} — compétition hebdo</span>`;
+    } else {
+      const gEq = pool.monthlyGuaranteedCRO !== null ? ` (≈${cro(pool.monthlyGuaranteedCRO)} CRO)` : "";
+      const bonus = cro(pool.bonusCRO);
+      el.innerHTML =
+        `🏆 <b>CAGNOTTE DU MOIS</b><br>` +
+        `<span>Garanti ≈$${pool.monthlyUsd} en CRO${gEq}</span><br>` +
+        `<span>Bonus communauté : <b>${bonus} CRO</b> (30% des Big Bangs du mois)</span><br>` +
+        `<b>Récompense totale ≈$${pool.monthlyUsd} + ${bonus} CRO</b>`;
+    }
   }
 
   /** Reflect the active weekly/monthly tab across both panels. */

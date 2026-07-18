@@ -145,7 +145,7 @@
     padding:7px 0;color:var(--dim);background:rgba(30,40,80,.4);border:1px solid rgba(140,170,255,.18);
     border-radius:8px;cursor:pointer}
   .lbTab.active{color:#050418;background:linear-gradient(180deg,#FFEDB0,var(--gold) 60%,#D89B1E);border-color:transparent}
-  .lbPrize{font-size:10px;letter-spacing:1.5px;color:var(--gold);font-weight:700;margin:0 0 8px;text-align:center}
+  .lbPrize{font-size:10px;letter-spacing:1.5px;color:var(--gold);font-weight:700;margin:0 0 8px;text-align:center;line-height:1.55}
   .lbPrize span{color:#c8cfe8;font-weight:600}
 
   #whiteout{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9}
@@ -208,7 +208,7 @@
       <button class="lbTab active" data-period="weekly">SEMAINE</button>
       <button class="lbTab" data-period="monthly">MOIS</button>
     </div>
-    <div class="lbPrize">🏆 TOP 1 · $50 <span>— compétition hebdo</span></div>
+    <div class="lbPrize" id="lbPrize">🏆 <b>TOP 1 · ≈$25</b> <span>payé en CRO — compétition hebdo</span></div>
     <div id="lbListMenu"><div class="lbEmpty">Chargement…</div></div>
   </div>
 </div>

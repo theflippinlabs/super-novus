@@ -21,6 +21,7 @@ import { UIManager } from "../ui/UIManager";
 import { DebugOverlay } from "../ui/DebugOverlay";
 import { WalletManager } from "../net/WalletManager";
 import { Leaderboard } from "../net/Leaderboard";
+import { PrizePool } from "../net/PrizePool";
 import { Payouts } from "../net/Payouts";
 import { AdminPanel } from "../ui/AdminPanel";
 import {
@@ -64,6 +65,8 @@ export class GameEngine {
     this.music = new MusicManager(MUSIC_SRC);
     this.wallet = new WalletManager();
     this.leaderboard = new Leaderboard(this.wallet);
+    this.prizePool = new PrizePool();     // live weekly/monthly prize-pool math
+    this.prizePool.flushPending();        // retry any purchase record queued offline
     this.particles = new ParticleSystem(this.scene);
     this.player = new Player(this.scene);
     this.trail = new Trail(this.scene);
@@ -79,7 +82,7 @@ export class GameEngine {
     if (this.debug) (window as any).__game = this; // debug-only inspection handle
     // Owner prize-payout console (?admin=1) — zero cost otherwise.
     if (new URLSearchParams(location.search).get("admin") === "1"){
-      this.payouts = new Payouts(this.wallet);
+      this.payouts = new Payouts(this.wallet, this.prizePool);
       this.admin = new AdminPanel(this.payouts, this.wallet);
     }
 
@@ -121,6 +124,8 @@ export class GameEngine {
 
   async _initAuth(){
     this.lbPeriod = "weekly";      // "weekly" | "monthly"
+    this._pool = this.prizePool.staticPool(); // instant guaranteed figures; upgraded live below
+    this.ui.setPrizePool(this.lbPeriod, this._pool);
     this._bindLbTabs();
     const refresh = () => this.ui.setAuth(this.wallet.getAddress(), this.wallet.available, this.wallet.getChainId());
     this.wallet.onChange(() => {
@@ -132,6 +137,7 @@ export class GameEngine {
     refresh();
     this.leaderboard.diagnose();   // logs exact Supabase connectivity status on boot
     await this._refreshBoards();
+    this._refreshPrizePool();      // live weekly/monthly prize pool on the menu board
     // best local (offline-first) affiché dès le menu
     this.best = this.leaderboard.getLocalBest().score;
     const addr = await this.wallet.tryReconnect();  // silent injected/WC reconnect
@@ -147,7 +153,19 @@ export class GameEngine {
         this.lbPeriod = period;
         this.ui.setLbTab(period);
         this._refreshBoards();
+        this.ui.setPrizePool(this.lbPeriod, this._pool ?? null); // re-render for the new tab
       });
+    }
+  }
+
+  /** Fetch the live prize pool (weekly + monthly community bonus) and show it on
+      the leaderboard panel for the active tab. Cheap; safe to call repeatedly. */
+  async _refreshPrizePool(){
+    try {
+      this._pool = await this.prizePool.compute();
+      this.ui.setPrizePool(this.lbPeriod, this._pool);
+    } catch (e){
+      console.warn("[PrizePool] refresh failed:", e);
     }
   }
 
@@ -519,8 +537,16 @@ export class GameEngine {
     btn.disabled = true;
     btn.textContent = "Paiement en cours…";
     try {
-      await this.wallet.payCRO(BIG_BANG_RECIPIENT, price);
+      const txHash = await this.wallet.payCRO(BIG_BANG_RECIPIENT, price);
       this.bigBangs++;                 // count this revive
+      // Record the purchase so the live Monthly Prize Pool grows (30% community
+      // bonus). Fire-and-forget + queued; never blocks the revive.
+      const buyer = this.wallet.getAddress();
+      if (buyer && txHash){
+        this.prizePool.recordPurchase(buyer, txHash, price)
+          .then(() => this._refreshPrizePool())
+          .catch((err) => console.warn("[BigBang] revenue record failed:", err));
+      }
       this._bigBangRevive();
     } catch (e){
       const msg = e instanceof Error ? e.message : String(e);

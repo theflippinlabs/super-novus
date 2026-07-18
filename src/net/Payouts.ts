@@ -7,8 +7,10 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import {
   SUPABASE_URL_DEFAULT, SUPABASE_ANON_KEY_DEFAULT,
   TREASURY_ADDRESS, WEEKLY_PRIZE_CRO, MONTHLY_PRIZE_CRO,
+  WEEKLY_PRIZE_USD, MONTHLY_PRIZE_USD, MONTHLY_BONUS_PCT,
 } from "../config";
 import { WalletManager } from "./WalletManager";
+import { PrizePool } from "./PrizePool";
 
 export interface Payout {
   id: number;
@@ -23,7 +25,7 @@ export interface Payout {
 export class Payouts {
   private client: SupabaseClient | null = null;
 
-  constructor(private wallet: WalletManager) {
+  constructor(private wallet: WalletManager, private prizePool: PrizePool) {
     const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || SUPABASE_URL_DEFAULT;
     const key = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || SUPABASE_ANON_KEY_DEFAULT;
     if (url && key) this.client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
@@ -36,8 +38,23 @@ export class Payouts {
     return !!a && a.toLowerCase() === TREASURY_ADDRESS.toLowerCase();
   }
 
+  /** Manual override amount (0 = auto-compute from the live price). */
   defaultPrizeCRO(period: "weekly" | "monthly"): number {
     return period === "weekly" ? WEEKLY_PRIZE_CRO : MONTHLY_PRIZE_CRO;
+  }
+
+  /** Suggested CRO to pay the winner, from the live price + monthly Big Bang
+      revenue: weekly = $25 in CRO; monthly = $50 in CRO + 30% of that month's
+      Big Bang revenue. Returns 0 if the price is unavailable (owner enters it).
+      A manual WEEKLY_/MONTHLY_PRIZE_CRO override, if set, always wins. */
+  async suggestedPrizeCRO(period: "weekly" | "monthly", periodStart: string): Promise<number> {
+    const override = this.defaultPrizeCRO(period);
+    if (override > 0) return override;
+    const usd = await this.prizePool.croUsd();
+    if (period === "weekly") return usd ? Math.round(WEEKLY_PRIZE_USD / usd) : 0;
+    const revenue = await this.prizePool.monthlyRevenueCRO(periodStart);
+    const guaranteed = usd ? MONTHLY_PRIZE_USD / usd : 0;
+    return Math.round(guaranteed + revenue * MONTHLY_BONUS_PCT);
   }
 
   async listPending(): Promise<Payout[]> {

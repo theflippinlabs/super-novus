@@ -99,8 +99,8 @@ export const BIG_BANG_RECIPIENT = "0x277B7CAD86D0f56Ae547533934dceA365ac7D7Bf";
 // --- Prize payouts (owner-approved, sent from the treasury wallet) ---
 // Same treasury both receives Big Bang CRO and sends the weekly/monthly prizes.
 export const TREASURY_ADDRESS = BIG_BANG_RECIPIENT;
-// Default CRO amount pre-filled in the admin payout panel (editable per payout;
-// e.g. the CRO equivalent of the $50 weekly prize). 0 = owner enters it.
+// Manual fallback CRO override for the admin payout panel. 0 = auto-compute from
+// the live CRO/USD price + the month's Big Bang revenue (see PrizePool).
 export const WEEKLY_PRIZE_CRO = 0;
 export const MONTHLY_PRIZE_CRO = 0;
 
@@ -129,7 +129,21 @@ export const SUPABASE_URL_DEFAULT = "https://xmjqrnlmcvrltjzuptao.supabase.co";
 export const SUPABASE_ANON_KEY_DEFAULT = "sb_publishable_4EM-qnipoN_8LZJhVHLv1A_Cigm8DlR";
 export const LEADERBOARD_PERIODS = ["weekly", "monthly"] as const;
 export type LeaderboardPeriod = (typeof LEADERBOARD_PERIODS)[number];
-export const WEEKLY_PRIZE_USD = 50;   // displayed only; no prize distribution logic
+
+// --- Prize pool (USD-pegged, paid in CRO at the live market price) ---
+// Weekly  : #1 wins the CRO equivalent of $WEEKLY_PRIZE_USD  (resets Monday 00:00 UTC).
+// Monthly : #1 wins the CRO equivalent of $MONTHLY_PRIZE_USD PLUS 30% of all CRO
+//           collected from Big Bang purchases that month (the Community Bonus).
+export const WEEKLY_PRIZE_USD = 25;    // guaranteed weekly prize (USD, paid in CRO)
+export const MONTHLY_PRIZE_USD = 50;   // guaranteed monthly prize (USD, paid in CRO)
+export const MONTHLY_BONUS_PCT = 0.30; // + 30% of the month's Big Bang CRO revenue
+// Live CRO/USD price (CoinGecko public API, browser-CORS friendly). Used only to
+// display / pre-fill the CRO equivalent of the USD-pegged prizes — the USD amounts
+// are the guaranteed figures, the CRO equivalent is always approximate ("≈").
+export const CRO_PRICE_URL =
+  "https://api.coingecko.com/api/v3/simple/price?ids=crypto-com-chain&vs_currencies=usd";
+export const CRO_PRICE_TTL_MS = 5 * 60 * 1000;   // cache the live price for 5 minutes
+export const CRO_PRICE_CACHE_KEY = "super-novus:cro-usd";
 
 // --- Music ---
 export const MUSIC_SRC = "/music.mp3";

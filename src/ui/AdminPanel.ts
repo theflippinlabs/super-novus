@@ -66,22 +66,31 @@ export class AdminPanel {
   }
 
   private row(p: Payout): HTMLElement {
-    const amount = this.payouts.defaultPrizeCRO(p.period_type);
     const row = document.createElement("div");
     row.style.cssText = "border:1px solid rgba(140,170,255,.2);border-radius:12px;padding:14px;margin-bottom:12px;background:rgba(8,12,30,.5)";
     row.innerHTML = `
       <div style="font-weight:700;letter-spacing:2px">${p.period_type === "weekly" ? "🏆 SEMAINE" : "🏆 MOIS"} · ${p.period_start}</div>
       <div style="font-size:12px;color:#c8cfe8;margin:6px 0">Gagnant <b>${shortAddr(p.wallet)}</b> — score ${p.best_score.toLocaleString("fr-FR")}</div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <input class="amt" type="number" value="${amount}" min="0" step="1"
+        <input class="amt" type="number" value="" placeholder="calcul…" min="0" step="1"
           style="width:100px;padding:9px;border-radius:8px;background:#0a0e24;color:#fff;border:1px solid #2a3a6a;font-family:inherit">
         <span style="color:#8b93b8;font-size:12px">CRO</span>
         <button class="pay" style="pointer-events:auto;padding:9px 18px;border:none;border-radius:8px;
           background:linear-gradient(180deg,#FFEDB0,#F5C542 60%,#D89B1E);color:#050418;font-weight:800;cursor:pointer">PAYER</button>
       </div>
-      <div class="status" style="font-size:11px;color:#8b93b8;margin-top:8px"></div>`;
+      <div class="hint" style="font-size:11px;color:#8b93b8;margin-top:8px"></div>
+      <div class="status" style="font-size:11px;color:#8b93b8;margin-top:6px"></div>`;
 
     const input = row.querySelector(".amt") as HTMLInputElement;
+    const hint = row.querySelector(".hint") as HTMLElement;
+    // Pre-fill the suggested CRO from the live price (+ 30% monthly bonus). The
+    // owner can still edit it before sending.
+    this.payouts.suggestedPrizeCRO(p.period_type, p.period_start).then((amt) => {
+      if (amt > 0 && !input.value) input.value = String(amt);
+      hint.textContent = p.period_type === "weekly"
+        ? "Suggestion : ≈$25 en CRO au taux du jour."
+        : "Suggestion : ≈$50 en CRO + 30% des Big Bangs du mois.";
+    }).catch(() => { /* leave blank — owner enters manually */ });
     const btn = row.querySelector(".pay") as HTMLButtonElement;
     const status = row.querySelector(".status") as HTMLElement;
     btn.addEventListener("click", async () => {
