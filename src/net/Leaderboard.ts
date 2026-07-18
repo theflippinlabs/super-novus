@@ -14,6 +14,16 @@ export interface LocalBest { v: 1; score: number; dist: number; dust: number; }
 
 const LOG = "[Supabase]";
 
+/** Pull a readable message out of an Edge Function JSON error body. */
+function extractErr(detail: string): string {
+  if (!detail) return "";
+  try {
+    const j = JSON.parse(detail);
+    if (j && j.error) return j.detail ? `${j.error} — ${j.detail}` : String(j.error);
+  } catch { /* not JSON */ }
+  return detail.slice(0, 140);
+}
+
 /** Current period boundaries in UTC — must match the Edge Function exactly.
     Monday 00:00 UTC for weekly, the 1st for monthly. */
 export function weekStartUTC(d: Date = new Date()): string {
@@ -34,6 +44,8 @@ export class Leaderboard {
   private memBest: LocalBest = { v: 1, score: 0, dist: 0, dust: 0 };
   /** Last human-readable failure, surfaced to the debug overlay. */
   lastError: string | null = null;
+  /** Precise reason the last submit() failed — shown on the Game Over screen. */
+  lastSubmitReason: string | null = null;
   private diagnosed = false;
 
   constructor(wallet: WalletManager) {
@@ -130,6 +142,22 @@ export class Leaderboard {
     }
   }
 
+  /** Read-check sn_leaderboard (tests the table exists + the RLS SELECT policy). */
+  async tableCheck(): Promise<{ ok: boolean; code?: string; message?: string; hint?: string }> {
+    if (!this.client) return { ok: false, message: "client non configuré" };
+    const { error } = await this.client.from("sn_leaderboard").select("wallet").limit(1);
+    if (error) return { ok: false, code: (error as any).code, message: error.message, hint: this.hint(error) };
+    return { ok: true };
+  }
+
+  /** Which URL/key the client is actually using (env override vs baked default). */
+  configInfo(): { url: string; keyMasked: string; usingEnvUrl: boolean; usingEnvKey: boolean } {
+    const usingEnvUrl = Boolean(import.meta.env.VITE_SUPABASE_URL);
+    const usingEnvKey = Boolean(import.meta.env.VITE_SUPABASE_ANON_KEY);
+    const key = this.envKey;
+    return { url: this.envUrl, keyMasked: key ? key.slice(0, 16) + "…" : "(aucune)", usingEnvUrl, usingEnvKey };
+  }
+
   /** Top N of the CURRENT weekly or monthly period. Past periods stay in the
       table (archived) and can be read by passing a historical period_start. */
   async top(period: LeaderboardPeriod, n = 10, periodStart?: string): Promise<BoardRow[]> {
@@ -165,9 +193,18 @@ export class Leaderboard {
   /** Signed submission through the Edge Function. Returns true if stored.
       `bigBangs` is unsigned transparency metadata (not part of the message). */
   async submit(score: number, dist: number, dust: number, bigBangs = 0): Promise<boolean> {
-    if (!this.client) { console.warn(`${LOG} submit skipped — leaderboard not configured.`); return false; }
+    this.lastSubmitReason = null;
+    if (!this.client) {
+      this.lastSubmitReason = "Supabase non configuré (URL/clé absente)";
+      console.warn(`${LOG} submit skipped — leaderboard not configured.`);
+      return false;
+    }
     const address = this.wallet.getAddress();
-    if (!address) { console.warn(`${LOG} submit skipped — no wallet connected (guests can't rank).`); return false; }
+    if (!address) {
+      this.lastSubmitReason = "Aucun wallet connecté";
+      console.warn(`${LOG} submit skipped — no wallet connected (guests can't rank).`);
+      return false;
+    }
 
     const ts = Date.now();
     const message = `SUPER NOVUS score:${score} dist:${dist} dust:${dust} ts:${ts}`;
@@ -175,6 +212,13 @@ export class Leaderboard {
     try {
       signature = await this.wallet.signMessage(message);
     } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      const code = (e as { code?: number })?.code;
+      const rejected = code === 4001 || /reject|denied|refus|cancel|annul/i.test(msg);
+      this.lastSubmitReason = rejected
+        ? "Signature refusée dans le wallet"
+        : `Signature impossible (wallet) : ${msg}`;
+      this.lastError = this.lastSubmitReason;
       console.error(`${LOG} submit aborted — signature failed/rejected:`, e);
       return false;
     }
@@ -184,22 +228,44 @@ export class Leaderboard {
     });
     if (error) {
       this.lastError = error.message;
-      // FunctionsHttpError carries the HTTP response; surface its body if present.
       let detail = "";
       try { detail = await (error as any).context?.text?.(); } catch { /* ignore */ }
-      const status = (error as any).context?.status;
-      const hint = status === 404
-        ? "Edge Function 'submit-score' not deployed → supabase functions deploy submit-score --no-verify-jwt"
-        : status === 401
-        ? "deploy the function with --no-verify-jwt, or check the anon key"
-        : "check the function logs (supabase functions logs submit-score)";
-      console.error(`${LOG} submit-score failed (status ${status ?? "?"}) — ${hint}\n${detail || error.message}`);
+      const status = (error as any).context?.status as number | undefined;
+      // Surface the EXACT cause (do not hide it) — this reaches the Game Over screen.
+      this.lastSubmitReason =
+        status === 404 ? "Serveur de scores non déployé (submit-score 404)"
+        : status === 401 ? "Fonction protégée par JWT — redéploie avec --no-verify-jwt (401)"
+        : status === 403 ? "Accès refusé (403) — vérifie la clé Supabase / le déploiement"
+        : status === 429 ? "Trop de soumissions — patiente ~30 s (429)"
+        : status === 400 ? `Données refusées (400) : ${extractErr(detail) || "bad request"}`
+        : status === 500 ? `Erreur serveur (500) : ${extractErr(detail) || "voir les logs"}`
+        : status ? `Échec (${status}) : ${extractErr(detail) || error.message}`
+        : `Réseau injoignable : ${error.message}`;
+      console.error(`${LOG} submit-score failed (status ${status ?? "?"}) — ${this.lastSubmitReason}\n${detail || error.message}`);
       return false;
     }
     const ok = Boolean((data as { ok?: boolean } | null)?.ok);
-    if (!ok) console.warn(`${LOG} submit-score returned not-ok:`, data);
-    else this.lastError = null;
+    if (!ok) {
+      this.lastSubmitReason = "Réponse serveur invalide (ok=false)";
+      console.warn(`${LOG} submit-score returned not-ok:`, data);
+    } else { this.lastError = null; this.lastSubmitReason = null; }
     return ok;
+  }
+
+  /** Probe the submit-score Edge Function WITHOUT signing — classifies whether it
+      is reachable/deployed. 400 = deployed & validating (good); 404 = not deployed;
+      401 = JWT-protected (redeploy --no-verify-jwt). Used by the ?diag panel. */
+  async probeFunction(): Promise<{ ok: boolean; status: number | null; reason: string }> {
+    if (!this.client) return { ok: false, status: null, reason: "client non configuré" };
+    const { error } = await this.client.functions.invoke("submit-score", { body: { probe: true } });
+    if (!error) return { ok: true, status: 200, reason: "atteignable (200)" };
+    const status = (error as any).context?.status ?? null;
+    let detail = ""; try { detail = await (error as any).context?.text?.(); } catch { /* ignore */ }
+    if (status === 400) return { ok: true, status, reason: "déployée & valide (400 validation) ✓" };
+    if (status === 404) return { ok: false, status, reason: "NON DÉPLOYÉE (404)" };
+    if (status === 401) return { ok: false, status, reason: "protégée JWT — redéploie --no-verify-jwt (401)" };
+    if (status === 403) return { ok: false, status, reason: "403 — clé/déploiement à vérifier" };
+    return { ok: false, status, reason: `status ${status ?? "?"} : ${extractErr(detail) || error.message}` };
   }
 
   /** Connected wallet's rank in a period (1-based), or null if unavailable
