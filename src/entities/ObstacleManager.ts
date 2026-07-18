@@ -75,7 +75,7 @@ export class ObstacleManager {
       group = new THREE.Group();
       body = new THREE.Mesh(new THREE.SphereGeometry(r, 26, 18),
         new THREE.MeshStandardMaterial({map:PlanetFactory.mercury(), roughness:.95, metalness:.02,
-          bumpMap:PlanetFactory.bump(), bumpScale:.08, emissive:0x0a0a10, emissiveIntensity:.5}));
+          bumpMap:PlanetFactory.bump(), bumpScale:.08, emissive:0x070710, emissiveIntensity:.28}));
       group.add(body);
     } else {
       const built = PlanetFactory.build(PlanetFactory.randomType(), r);

@@ -4,7 +4,7 @@
    the STAR ENERGY "charged" brightness boost (does NOT touch shader). */
 import * as THREE from "three";
 import { TEX, canvasTex } from "../core/textures";
-import { PLAYER_RADIUS, PLAYER_LIGHT_INTENSITY, PLAYER_LIGHT_INTENSITY_CHARGED } from "../config";
+import { PLAYER_RADIUS, PLAYER_VISUAL_SCALE, PLAYER_LIGHT_INTENSITY, PLAYER_LIGHT_INTENSITY_CHARGED } from "../config";
 
 export class Player {
   group: THREE.Group;
@@ -95,6 +95,10 @@ export class Player {
 
     this.light = new THREE.PointLight(0xFFC873, PLAYER_LIGHT_INTENSITY, 110, 1.6);
     this.group.add(this.light);
+
+    // Render the whole visual group ~20% smaller (agility/space) WITHOUT
+    // touching the collision radius (this.r) used by the physics.
+    this.group.scale.setScalar(PLAYER_VISUAL_SCALE);
 
     scene.add(this.group);
     this.pos = this.group.position;

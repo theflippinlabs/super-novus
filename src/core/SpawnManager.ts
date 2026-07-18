@@ -41,10 +41,13 @@ export class SpawnManager {
   populate(z: number, level: number): void {
     const rng = this.rng;
     const { obstacles, stardust } = this.deps;
+    // Fewer big planet/moon obstacles in the play field (readability); the freed
+    // weight goes to asteroids, so total obstacle density — and difficulty — is
+    // unchanged (0.72 obstacle probability, same as before).
     const r = rng.next();
-    if (r < 0.11) obstacles.planet(z, false, rng);
-    else if (r < 0.17) obstacles.planet(z, true, rng);
-    else if (r < 0.32) obstacles.field(z, rng);
+    if (r < 0.05) obstacles.planet(z, false, rng);
+    else if (r < 0.08) obstacles.planet(z, true, rng);
+    else if (r < 0.23) obstacles.field(z, rng);
     else if (r < 0.68) obstacles.rock(z, null, null, rng);
     else if (r < 0.72) obstacles.debris(z, rng);
     if (level >= 2 && rng.next() < 0.05 + level*0.008) obstacles.comet(z - 7, rng);

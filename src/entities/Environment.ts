@@ -71,7 +71,7 @@ export class Environment {
 
     /* --- planètes de décor réalistes, distances variées --- */
     this.decor = [];
-    this.nextDecorZ = -140;
+    this.nextDecorZ = -300;
 
     /* --- astéroïdes d'arrière/avant-plan (non-collision, profondeur) --- */
     this.bgRockCount = 26;
@@ -138,22 +138,25 @@ export class Environment {
   clearDecor(){
     for (const d of this.decor) this.scene.remove(d.mesh);
     this.decor.length = 0;
-    this.nextDecorZ = -140;
+    this.nextDecorZ = -300;
   }
-  spawnDecor(z){
-    const r = rand(26, 60);
-    const type = PlanetFactory.randomType();
-    const {group, body} = PlanetFactory.build(type, r);
+  /* Decor planets in three depth tiers → real parallax + open space:
+     - distant : far & small (background depth), common but never clutter
+     - medium  : occasional
+     - close   : big cinematic planet, rare special event
+     None are collidable (pure visual). */
+  spawnDecor(playerZ, tier = "distant"){
+    const T = ({
+      distant: { r:[18,34], x:[150,330], ahead:[440,780], spin:[0.006,0.018] },
+      medium:  { r:[26,44], x:[95,185],  ahead:[320,540], spin:[0.012,0.030] },
+      close:   { r:[46,66], x:[52,110],  ahead:[190,300], spin:[0.020,0.045] },
+    })[tier] || { r:[18,34], x:[150,330], ahead:[440,780], spin:[0.006,0.018] };
+    const r = rand(T.r[0], T.r[1]);
+    const {group, body} = PlanetFactory.build(PlanetFactory.randomType(), r);
     const side = Math.random() < .5 ? -1 : 1;
-    /* distances variées pour renforcer la perspective */
-    const depth = Math.random();
-    group.position.set(
-      side * rand(70, 150) * (1 + depth*0.6),
-      rand(-70, 70),
-      z - depth*120
-    );
+    group.position.set(side * rand(T.x[0], T.x[1]), rand(-80, 80), playerZ - rand(T.ahead[0], T.ahead[1]));
     this.scene.add(group);
-    this.decor.push({mesh:group, body, spin:rand(0.015,0.05)});
+    this.decor.push({mesh:group, body, spin:rand(T.spin[0], T.spin[1])});
   }
 
   update(dt, player, speed, running){
@@ -161,9 +164,15 @@ export class Environment {
     this.group.rotation.y += dt*0.002;
     this.lmFlare.material.rotation += dt*0.05;
 
-    if (running && player.pos.z - 240 < this.nextDecorZ){
-      this.spawnDecor(player.pos.z - rand(320, 420));
-      this.nextDecorZ = player.pos.z - rand(130, 210);
+    if (running && player.pos.z < this.nextDecorZ){
+      // Weighted composition: mostly open space, distant planets for depth,
+      // rare close cinematic planets (≈ open / distant / close).
+      const roll = Math.random();
+      if (roll < 0.50) { /* open space — spawn nothing */ }
+      else if (roll < 0.88) this.spawnDecor(player.pos.z, "distant");
+      else if (roll < 0.95) this.spawnDecor(player.pos.z, "medium");
+      else this.spawnDecor(player.pos.z, "close");
+      this.nextDecorZ = player.pos.z - rand(300, 520); // sparse beats
     }
     for (let i = this.decor.length-1; i >= 0; i--){
       const d = this.decor[i];

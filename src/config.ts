@@ -6,7 +6,8 @@
 ============================================================ */
 
 // --- Player (REF — validated, do not alter game feel) ---
-export const PLAYER_RADIUS = 1.1;
+export const PLAYER_RADIUS = 1.1;      // collision radius — MUST NOT change
+export const PLAYER_VISUAL_SCALE = 0.8; // render-only: ~20% smaller than the hitbox
 export const PLAYER_LIGHT_INTENSITY = 3.4;
 export const PLAYER_LIGHT_INTENSITY_CHARGED = 4.25; // +25% when STAR ENERGY full
 export const PLAYER_INVULNERABILITY = 2.0;

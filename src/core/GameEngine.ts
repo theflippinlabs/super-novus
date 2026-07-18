@@ -49,8 +49,8 @@ export class GameEngine {
     /* éclairage : lumière directionnelle depuis l'étoile-repère → terminateur réaliste.
        Intensités réduites + teinte réchauffée pour éviter les bords de planètes
        cramés en blanc — la lisibilité du gameplay prime sur le bloom. */
-    this.scene.add(new THREE.AmbientLight(0x2c3050, 0.52));
-    const sunLight = new THREE.DirectionalLight(0xf0e2c6, 1.1);
+    this.scene.add(new THREE.AmbientLight(0x2c3050, 0.48));
+    const sunLight = new THREE.DirectionalLight(0xf0e2c6, 1.0);
     sunLight.position.set(-150, 170, 60);
     this.scene.add(sunLight);
     const fill = new THREE.DirectionalLight(0x8090c0, 0.14);
@@ -272,7 +272,7 @@ export class GameEngine {
     this.nextZ = -70;
     for (let z = -70; z > -340; z -= 15) this.spawn.populate(z, this.level);
     this.nextZ = -340;
-    this.env.spawnDecor(-170); this.env.spawnDecor(-300);
+    this.env.spawnDecor(0, "distant"); this.env.spawnDecor(0, "distant"); this.env.spawnDecor(0, "medium");
     this.ui.setLives(this.lives, CFG.lives);
     this.ui.menu.style.display = "none";
     this.ui.gameover.style.display = "none";

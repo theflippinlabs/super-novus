@@ -292,8 +292,8 @@ const PlanetFactory: any = {
       metalness: 0.02,
       bumpMap: isRocky ? this.bump() : null,
       bumpScale: isRocky ? 0.06 : 0,
-      emissive: 0x0a0c14,
-      emissiveIntensity: 0.55,
+      emissive: 0x070910,
+      emissiveIntensity: 0.28,   // dimmer — planets must never outshine obstacles
     });
     const body = new THREE.Mesh(new THREE.SphereGeometry(r, 34, 24), mat);
     body.rotation.z = rand(-0.35, 0.35);
@@ -314,7 +314,7 @@ const PlanetFactory: any = {
       }
       const rt = ringed === "saturn" ? this.saturnRing() : this.genericRing(rand(0,360));
       const ring = new THREE.Mesh(rg, new THREE.MeshBasicMaterial({
-        map:rt, transparent:true, side:THREE.DoubleSide, depthWrite:false, opacity:.95}));
+        map:rt, transparent:true, side:THREE.DoubleSide, depthWrite:false, opacity:.8}));
       ring.rotation.x = Math.PI/2 + rand(-0.4, 0.4);
       ring.rotation.y = rand(-0.25, 0.25);
       group.add(ring);
