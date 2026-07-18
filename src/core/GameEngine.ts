@@ -154,9 +154,10 @@ export class GameEngine {
     this.wallet.onChange(() => {
       refresh();
       this._refreshIdentity();       // avatar + nickname chip (never the address)
-      // A wallet just (re)connected → push any score stored while offline.
-      this.leaderboard.syncPending().then((ok) => { if (ok) this._refreshBoards(); });
       this._refreshBoards();
+      // NO automatic score submission here: publishing a score needs a signature
+      // (a wallet deep link on iOS), which must ONLY happen on an explicit
+      // "Save score" tap — never on a silent reconnect / tab resume.
     });
     refresh();
     this.leaderboard.diagnose();   // logs exact Supabase connectivity status on boot
@@ -318,6 +319,7 @@ export class GameEngine {
   _bindUI(){
     this.ui.playBtn.addEventListener("click", () => { this.audio.init(); this.start(); });
     // Game Over — two choices only: Big Bang (paid continue) or Return to Menu.
+    this.ui.saveScoreBtn.addEventListener("click", () => this._saveScore());
     this.ui.bigBangBtn.addEventListener("click", () => this._buyBigBang());
     this.ui.menuBtn.addEventListener("click", () => this._returnToMenu());
     this.ui.pauseBtn.addEventListener("click", () => {
@@ -575,25 +577,13 @@ export class GameEngine {
     // Accumulate local lifetime stats for the profile (frontend-only for now).
     this.profile.recordRun(finalScore, finalDist, this.dust, this.bigBangs);
 
-    // Submit BEFORE leaving the screen (if a wallet is connected); otherwise
-    // store locally so it auto-syncs when a wallet reconnects.
-    let saved = false;
-    const hasWallet = Boolean(this.leaderboard.pseudo);
-    if (hasWallet){
-      saved = await this.leaderboard.submit(finalScore, finalDist, this.dust, this.bigBangs);
-      // If it failed, keep the run locally so it auto-syncs later (e.g. once the
-      // Edge Function is deployed / after a signature retry). No run is lost.
-      if (!saved && finalScore > 0)
-        this.leaderboard.savePending(finalScore, finalDist, this.dust, this.bigBangs);
-    } else if (this.leaderboard.available && finalScore > 0)
+    // IMPORTANT: Game Over must NEVER touch the wallet automatically. Submitting a
+    // score needs a signature, which deep-links to the wallet app on iOS — that
+    // may only happen when the player explicitly taps "Save score". So here we
+    // just stash the run (memory + a local backup) and let _saveScore() publish it.
+    this._pendingRun = { score: finalScore, dist: finalDist, dust: this.dust, bigBangs: this.bigBangs };
+    if (this.leaderboard.available && finalScore > 0)
       this.leaderboard.savePending(finalScore, finalDist, this.dust, this.bigBangs);
-
-    // Ranks only make sense once the score is on the board.
-    let weeklyR: number | null = null, monthlyR: number | null = null;
-    if (saved){
-      weeklyR = await this.leaderboard.myRank("weekly");
-      monthlyR = await this.leaderboard.myRank("monthly");
-    }
 
     setTimeout(() => {
       document.getElementById("finalScore")!.textContent = finalScore.toLocaleString("fr-FR");
@@ -603,23 +593,55 @@ export class GameEngine {
       document.getElementById("bestScore")!.textContent = i18n.t("gameover.record") + " · " + this.best.toLocaleString(loc);
       document.getElementById("seedLine")!.textContent = i18n.t("gameover.seed") + " · " + this.spawn.seed;
       this.ui.showNewRecord(isNewRecord);
-      this.ui.setRank("weekly", weeklyR);
-      this.ui.setRank("monthly", monthlyR);
+      this.ui.setRank("weekly", null);    // ranks appear only after an explicit Save
+      this.ui.setRank("monthly", null);
       const ss = this.ui.saveState;
-      if (saved){ ss.textContent = i18n.t("gameover.saved"); ss.className = "ok"; }
-      else if (hasWallet){
-        // Show the EXACT reason (never hidden). Kept locally, will auto-sync later.
-        ss.textContent = "⚠ " + (this.leaderboard.lastSubmitReason || i18n.t("gameover.saveFailed"));
-        ss.className = "no";
+      const sBtn = this.ui.saveScoreBtn;
+      if (this.leaderboard.available && finalScore > 0){
+        ss.textContent = i18n.t("gameover.savePrompt"); ss.className = "no";
+        sBtn.style.display = ""; sBtn.disabled = false; sBtn.textContent = i18n.t("gameover.saveBtn");
+      } else {
+        ss.textContent = this.leaderboard.available ? "" : i18n.t("gameover.lbSoon"); ss.className = "no";
+        sBtn.style.display = "none";
       }
-      else if (this.leaderboard.available){ ss.textContent = i18n.t("gameover.saveGuest"); ss.className = "no"; }
-      else { ss.textContent = i18n.t("gameover.lbSoon"); ss.className = "no"; }
       this._updateBigBangButton();
       this.ui.gameover.style.display = "flex";
       this.ui.hud.style.display = "none";
       this.ui.pauseBtn.style.display = "none";
       this._refreshBoards();
     }, 1400);
+  }
+
+  /** Explicit "Save score" — the ONLY place a score signature is requested.
+      Connects the wallet on demand (also explicit, since the player tapped),
+      signs, submits, then reveals the weekly/monthly rank. */
+  async _saveScore(){
+    if (!this._pendingRun || !this.leaderboard.available) return;
+    const btn = this.ui.saveScoreBtn, ss = this.ui.saveState;
+    btn.disabled = true; btn.textContent = i18n.t("gameover.saving");
+    // Connect on demand so guests can save too — user-initiated, no auto deep link.
+    if (!this.wallet.getAddress()){
+      try { await this.wallet.connect(); this._refreshIdentity(); }
+      catch (e){
+        const msg = e instanceof Error ? e.message : String(e);
+        const rejected = /reject|denied|refus|cancel|annul|4001|close/i.test(msg);
+        ss.textContent = rejected ? i18n.t("wallet.cancelled") : ("⚠ " + msg); ss.className = "no";
+        btn.disabled = false; btn.textContent = i18n.t("gameover.saveBtn");
+        return;
+      }
+    }
+    const r = this._pendingRun;
+    const ok = await this.leaderboard.submit(r.score, r.dist, r.dust, r.bigBangs);
+    if (ok){
+      ss.textContent = i18n.t("gameover.saved"); ss.className = "ok";
+      btn.style.display = "none";
+      const [w, m] = await Promise.all([this.leaderboard.myRank("weekly"), this.leaderboard.myRank("monthly")]);
+      this.ui.setRank("weekly", w); this.ui.setRank("monthly", m);
+      this._refreshBoards();
+    } else {
+      ss.textContent = "⚠ " + (this.leaderboard.lastSubmitReason || i18n.t("gameover.saveFailed")); ss.className = "no";
+      btn.disabled = false; btn.textContent = i18n.t("gameover.saveBtn");
+    }
   }
 
   /** Reflect Big Bang state: dynamic price per revive (#1/#2/#3), usage count,

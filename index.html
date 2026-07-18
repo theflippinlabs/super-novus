@@ -143,6 +143,10 @@
     transition:transform .12s,border-color .2s,box-shadow .2s}
   button.mini:hover{border-color:rgba(176,158,255,.62);box-shadow:0 10px 24px rgba(44,32,96,.55), 0 1px 0 rgba(255,255,255,.16) inset}
   button.mini:active{transform:scale(.96)}
+  button.mini.save{margin-bottom:8px;color:#06180e;border:none;font-weight:800;letter-spacing:2px;
+    background:linear-gradient(180deg,#c7f5cf,#63d492 58%,#2fae62);
+    box-shadow:0 8px 20px rgba(60,200,120,.38), 0 1px 0 rgba(255,255,255,.35) inset}
+  button.mini.save:disabled{opacity:.6;filter:grayscale(.3);cursor:default}
   #loggedRow{display:none;flex-direction:row;gap:10px;align-items:center}
   #loggedRow .who{font-size:12px;letter-spacing:2px;color:#bfe0a8;font-weight:700}
   .authNote{font-size:9.5px;letter-spacing:1px;color:#5a6288}
@@ -332,6 +336,7 @@
   <div id="bestScore"></div>
   <div id="seedLine"></div>
   <div id="saveState" class="no"></div>
+  <button class="mini save" id="saveScoreBtn" data-i18n="gameover.saveBtn" style="display:none">ENREGISTRER LE SCORE</button>
   <button class="big bigbang" id="bigBangBtn">🌌 BIG BANG #1 — 10 CRO</button>
   <div id="bigBangCount"></div>
   <button class="mini" id="menuBtn" data-i18n="gameover.menu">RETOUR AU MENU</button>
