@@ -1,4 +1,5 @@
 // SUPER NOVUS — submit-score Edge Function (Deno / Supabase)
+// redeploy: v3 — MUST deploy with verify_jwt=false (see supabase/config.toml).
 // Verifies an EIP-191 signature, rate-limits, records the submission, and
 // upserts the wallet's best score into the current WEEKLY and MONTHLY periods.
 // Deploy: supabase functions deploy submit-score --no-verify-jwt

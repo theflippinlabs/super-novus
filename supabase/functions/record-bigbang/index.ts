@@ -1,4 +1,5 @@
 // SUPER NOVUS — record-bigbang Edge Function (Deno / Supabase)
+// redeploy: v3 — MUST deploy with verify_jwt=false (see supabase/config.toml).
 // Records a Big Bang purchase so the live Monthly Prize Pool (guaranteed $50 in
 // CRO + 30% Community Bonus) can be computed. The purchase is verified ON-CHAIN
 // against the Cronos RPC: the tx must pay the treasury the exact CRO amount from
