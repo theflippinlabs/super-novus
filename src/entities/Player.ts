@@ -70,8 +70,8 @@ export class Player {
 
     // Smaller, dimmer white halo — keeps the core visible without washing out
     // nearby obstacles (gameplay readability over bloom).
-    this.g1 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, transparent: true, opacity: .5, depthWrite: false, blending: THREE.AdditiveBlending }));
-    this.g1.scale.setScalar(6);
+    this.g1 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, transparent: true, opacity: .3, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.g1.scale.setScalar(5);
     this.g2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.ember, transparent: true, opacity: .75, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.g2.scale.setScalar(15);
     this.group.add(this.g1, this.g2);
@@ -88,9 +88,9 @@ export class Player {
           ctx.stroke();
         }
       }),
-      transparent: true, opacity: .32, depthWrite: false, blending: THREE.AdditiveBlending,
+      transparent: true, opacity: .22, depthWrite: false, blending: THREE.AdditiveBlending,
     }));
-    this.flare.scale.setScalar(9);
+    this.flare.scale.setScalar(8);
     this.group.add(this.flare);
 
     this.light = new THREE.PointLight(0xFFC873, PLAYER_LIGHT_INTENSITY, 110, 1.6);
@@ -110,7 +110,7 @@ export class Player {
     this.coreMat.uniforms.uTime.value = t;
     this.core.rotation.y += dt * 0.6;
     this.core.rotation.x += dt * 0.25;
-    this.g1.material.opacity = 0.5 + Math.sin(t * 7) * 0.06;
+    this.g1.material.opacity = 0.3 + Math.sin(t * 7) * 0.05;
     this.g2.scale.setScalar(15 + Math.sin(t * 4.3) * 1.8);
     this.flare.material.rotation += dt * 0.3;
     if (this.invuln > 0) {

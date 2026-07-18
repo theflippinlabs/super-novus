@@ -56,6 +56,11 @@
     background:rgba(10,12,32,.45);border:1px solid rgba(255,255,255,.18);border-radius:12px;
     color:#fff;font-size:14px;display:none;align-items:center;justify-content:center;z-index:7;
     pointer-events:auto;font-family:inherit;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  #musicBtn{position:fixed;top:calc(8px + env(safe-area-inset-top));left:12px;width:40px;height:40px;
+    background:rgba(10,12,32,.4);border:1px solid rgba(255,255,255,.16);border-radius:11px;
+    color:#fff;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:11;
+    pointer-events:auto;font-family:inherit;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  #musicBtn.off{opacity:.5}
   #levelToast{position:fixed;top:26%;left:50%;transform:translateX(-50%);font-size:13px;font-weight:800;
     letter-spacing:6px;color:#fff;text-shadow:0 0 20px rgba(140,180,255,.9);opacity:0;transition:opacity .5s;z-index:6;white-space:nowrap}
 
@@ -160,6 +165,7 @@
   <div id="levelToast">VITESSE ++</div>
 </div>
 <button id="pauseBtn">❚❚</button>
+<button id="musicBtn" aria-label="Musique">🎵</button>
 
 <div id="whiteout"></div>
 <div id="novaFlash"></div>

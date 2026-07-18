@@ -20,6 +20,7 @@ export class UIManager {
   energyFill = $("energyFill");
   novaFlash = $("novaFlash");
   pauseBtn = $("pauseBtn") as HTMLButtonElement;
+  musicBtn = $("musicBtn") as HTMLButtonElement;
   toast = $("levelToast");
   whiteout = $("whiteout");
   hitFlash = $("hitFlash");
@@ -51,6 +52,13 @@ export class UIManager {
   /** Toggle the "full" state: blinking bar + Nova Blast hint. */
   setNovaReady(ready: boolean): void {
     this.energyWrap.classList.toggle("full", ready);
+  }
+
+  /** Reflect music ON/OFF on the HUD toggle. */
+  setMusicButton(on: boolean): void {
+    this.musicBtn.textContent = on ? "🎵" : "🔇";
+    this.musicBtn.classList.toggle("off", !on);
+    this.musicBtn.setAttribute("aria-label", on ? "Couper la musique" : "Activer la musique");
   }
 
   /** White-gold full-screen flash for Nova Blast (~400ms). */

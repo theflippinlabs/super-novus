@@ -26,7 +26,8 @@ export class AudioManager {
     this.humGain.gain.value = 0;
     noise.connect(this.humFilter).connect(this.humGain).connect(this.master);
     noise.start();
-    this.startMusic();
+    // Ambient music now comes from MusicManager (real audio file), not the
+    // procedural chord generator — so it is intentionally not started here.
   }
   setHum(speed01, on){
     if (!this.ctx) return;

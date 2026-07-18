@@ -106,6 +106,11 @@ export const LEADERBOARD_PERIODS = ["weekly", "monthly"] as const;
 export type LeaderboardPeriod = (typeof LEADERBOARD_PERIODS)[number];
 export const WEEKLY_PRIZE_USD = 50;   // displayed only; no prize distribution logic
 
+// --- Music ---
+export const MUSIC_SRC = "/music.mp3";
+export const MUSIC_VOLUME = 0.22;      // 22% (target of the 20–25% range)
+export const MUSIC_PREF_KEY = "super-novus:music";
+
 // --- Rendering ---
 export const PIXEL_RATIO_CAP = 2;
 export const TONE_EXPOSURE = 1.15;

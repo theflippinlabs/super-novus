@@ -5,6 +5,8 @@ import * as THREE from "three";
 import { rand, clamp, reduceMotion } from "./util";
 import { CFG } from "./legacyCfg";
 import { AudioManager } from "../audio/AudioManager";
+import { MusicManager } from "../audio/MusicManager";
+import { MUSIC_SRC } from "../config";
 import { ParticleSystem } from "../fx/ParticleEngine";
 import { Player } from "../entities/Player";
 import { Trail } from "../entities/Trail";
@@ -47,15 +49,16 @@ export class GameEngine {
     /* éclairage : lumière directionnelle depuis l'étoile-repère → terminateur réaliste.
        Intensités réduites + teinte réchauffée pour éviter les bords de planètes
        cramés en blanc — la lisibilité du gameplay prime sur le bloom. */
-    this.scene.add(new THREE.AmbientLight(0x2c3050, 0.6));
-    const sunLight = new THREE.DirectionalLight(0xf0e2c6, 1.25);
+    this.scene.add(new THREE.AmbientLight(0x2c3050, 0.52));
+    const sunLight = new THREE.DirectionalLight(0xf0e2c6, 1.1);
     sunLight.position.set(-150, 170, 60);
     this.scene.add(sunLight);
-    const fill = new THREE.DirectionalLight(0x8090c0, 0.16);
+    const fill = new THREE.DirectionalLight(0x8090c0, 0.14);
     fill.position.set(120, -60, -40);
     this.scene.add(fill);
 
     this.audio = new AudioManager();
+    this.music = new MusicManager(MUSIC_SRC);
     this.wallet = new WalletManager();
     this.leaderboard = new Leaderboard(this.wallet);
     this.particles = new ParticleSystem(this.scene);
@@ -98,10 +101,12 @@ export class GameEngine {
     // Tab visibility: suspend/resume the shared AudioContext (never recreate).
     document.addEventListener("visibilitychange", () => {
       if (document.hidden){
-        this.audio.suspendContext();
+        this.audio.suspendContext();   // pause hum/SFX AudioContext
+        this.music.suspend();          // pause background music
       } else {
-        this.audio.resumeContext(!this.paused); // don't relaunch music while paused
-        this.clock.getDelta();                  // avoid a dt jump on return
+        this.audio.resumeContext(false);
+        this.music.resume();           // resume music if it was on
+        this.clock.getDelta();         // avoid a dt jump on return
       }
     });
   }
@@ -205,15 +210,19 @@ export class GameEngine {
       if (!this.running) return;
       this.paused = true;
       this.ui.pauseScreen.style.display = "flex";
-      this.audio.setHum(0, false);   // cut the speed hum
-      this.audio.stopMusic();        // suspend the generative-music timer
+      this.audio.setHum(0, false);   // cut the speed hum (music keeps looping)
     });
     document.getElementById("resumeBtn")!.addEventListener("click", () => {
       this.paused = false;
       this.ui.pauseScreen.style.display = "none";
-      this.audio.startMusic();       // relaunch the music loop
       this.clock.getDelta();         // resync so dt doesn't jump on resume
     });
+    // HUD music ON/OFF (persisted); never interferes with gameplay input.
+    this.ui.musicBtn.addEventListener("click", () => {
+      const on = this.music.toggle();
+      this.ui.setMusicButton(on);
+    });
+    this.ui.setMusicButton(this.music.isEnabled);
     this.ui.walletBtn.addEventListener("click", async () => {
       this.ui.walletBtn.disabled = true;
       this.ui.walletState.textContent = "Connexion en cours…";
@@ -223,7 +232,13 @@ export class GameEngine {
         await this._refreshBoards();
       } catch (e) {
         this.ui.setAuth(null, this.wallet.available, null);
-        this.ui.setWalletError(e instanceof Error ? e.message : "erreur inconnue");
+        // Graceful handling: a user-rejected connection is not an error state.
+        const code = (e as { code?: number })?.code;
+        const msg = e instanceof Error ? e.message : String(e ?? "");
+        if (code === 4001 || /reject|denied|refus|cancel|annul|close/i.test(msg))
+          this.ui.walletState.textContent = "Connexion annulée — tu peux réessayer ou continuer en invité.";
+        else
+          this.ui.setWalletError(msg || "erreur inconnue");
       } finally {
         this.ui.walletBtn.disabled = !this.wallet.available;
       }
@@ -263,6 +278,8 @@ export class GameEngine {
     this.ui.gameover.style.display = "none";
     this.ui.hud.style.display = "block";
     this.ui.pauseBtn.style.display = "flex";
+    this.ui.musicBtn.style.display = "flex";
+    this.music.play();   // starts on this user-gesture (autoplay-compliant)
     this.running = true; this.paused = false;
     this.clock.getDelta();
   }
