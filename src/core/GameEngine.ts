@@ -117,6 +117,7 @@ export class GameEngine {
     const refresh = () => this.ui.setAuth(this.wallet.getAddress(), this.wallet.available, this.wallet.getChainId());
     this.wallet.onChange(() => { refresh(); this._refreshBoards(); });
     refresh();
+    this.leaderboard.diagnose();   // logs exact Supabase connectivity status on boot
     await this._refreshBoards();
     // best local (offline-first) affiché dès le menu
     this.best = this.leaderboard.getLocalBest().score;

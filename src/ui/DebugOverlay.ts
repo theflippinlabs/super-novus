@@ -45,7 +45,8 @@ export class DebugOverlay {
 
     const addr = game.wallet?.getAddress?.() ?? null;
     const wallet = addr ? shortAddr(addr) : "invité";
-    const net = game.leaderboard?.available ? "supabase" : "offline";
+    const lbErr = game.leaderboard?.lastError;
+    const net = (game.leaderboard?.available ? "supabase" : "offline") + (lbErr ? ` ⚠ ${lbErr}` : "");
     const seed = game.spawn?.seed ?? "—";
     const density = game._density ? game._density(game.level).toFixed(1) : "—";
     const activeObs = game.obstacles?.list?.length ?? 0;
