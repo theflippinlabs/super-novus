@@ -6,9 +6,10 @@ import { TEX, PlanetFactory, canvasTex, glowTex } from "../core/textures";
 export class Trail {
   [key: string]: any;
   constructor(scene){
+    // Blue-cyan comet trail to match the recoloured plasma core.
     this.layers = [
-      this._make(scene, TEX.ember, "1.25, 0.8, 0.45", 4.0, 160),
-      this._make(scene, TEX.star, "1.15, 1.0, 0.72", 2.0, 100),
+      this._make(scene, TEX.star, "0.34, 0.70, 1.20", 4.0, 160),
+      this._make(scene, TEX.star, "0.72, 0.95, 1.20", 2.0, 100),
     ];
     this.hist = [];
   }

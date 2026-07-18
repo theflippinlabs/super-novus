@@ -1,7 +1,7 @@
-/* Player — cœur plasma. PORTED VERBATIM from validated reference.
-   GOLDEN RULE: rendering, shaders and feel must not change.
-   Only additions: typed fields + config-driven light intensity for
-   the STAR ENERGY "charged" brightness boost (does NOT touch shader). */
+/* Player — cœur plasma. Ported from the validated reference; geometry, motion,
+   collision radius and feel are UNCHANGED. The plasma palette was intentionally
+   recoloured from gold to electric blue-cyan to match the SUPERNOVUS logo
+   (colours only — the shader math, sizes and light intensities are identical). */
 import * as THREE from "three";
 import { TEX, canvasTex } from "../core/textures";
 import { PLAYER_RADIUS, PLAYER_VISUAL_SCALE, PLAYER_LIGHT_INTENSITY, PLAYER_LIGHT_INTENSITY_CHARGED } from "../config";
@@ -55,14 +55,15 @@ export class Player {
           float n = fbm(vP*3.0 + vec3(0.0, uTime*0.8, uTime*0.5));
           float n2 = fbm(vP*7.0 - vec3(uTime*1.2, 0.0, uTime*0.7));
           float heat = n*0.7 + n2*0.5;
-          vec3 hot  = vec3(1.0, 0.98, 0.88);
-          vec3 mid  = vec3(1.0, 0.72, 0.25);
-          vec3 cool = vec3(0.95, 0.32, 0.05);
+          // Electric blue-cyan plasma core (matches the SUPERNOVUS logo).
+          vec3 hot  = vec3(0.90, 0.98, 1.00);   // white-cyan hottest
+          vec3 mid  = vec3(0.28, 0.66, 1.00);   // electric blue
+          vec3 cool = vec3(0.26, 0.26, 0.92);   // deep indigo edges
           vec3 col = mix(hot, mid, smoothstep(0.35, 0.62, heat));
           col = mix(col, cool, smoothstep(0.62, 0.85, heat));
           float fr = pow(1.0 - abs(dot(normalize(vN), normalize(-vW))), 2.2);
-          col += vec3(1.0, 0.55, 0.15) * fr * 1.6;
-          gl_FragColor = vec4(col*1.35, 1.0);
+          col += vec3(0.34, 0.66, 1.00) * fr * 1.6;  // cyan-blue fresnel rim
+          gl_FragColor = vec4(col*1.32, 1.0);
         }`,
     });
     this.core = new THREE.Mesh(new THREE.SphereGeometry(this.r, 40, 30), this.coreMat);
@@ -70,16 +71,16 @@ export class Player {
 
     // Smaller, dimmer white halo — keeps the core visible without washing out
     // nearby obstacles (gameplay readability over bloom).
-    this.g1 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, transparent: true, opacity: .3, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.g1 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0xa8d4ff, transparent: true, opacity: .3, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.g1.scale.setScalar(5);
-    this.g2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.ember, transparent: true, opacity: .75, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.g2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0x4a9cff, transparent: true, opacity: .75, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.g2.scale.setScalar(15);
     this.group.add(this.g1, this.g2);
 
     // Warmer, dimmer, smaller lens flare (was bright white and oversized).
     this.flare = new THREE.Sprite(new THREE.SpriteMaterial({
       map: canvasTex(128, 128, (ctx) => {
-        ctx.strokeStyle = "rgba(255,208,150,.7)";
+        ctx.strokeStyle = "rgba(150,205,255,.7)";
         for (const [w, l] of [[2.4, 62], [1.2, 40]]) {
           ctx.lineWidth = w;
           ctx.beginPath();
@@ -93,7 +94,7 @@ export class Player {
     this.flare.scale.setScalar(8);
     this.group.add(this.flare);
 
-    this.light = new THREE.PointLight(0xFFC873, PLAYER_LIGHT_INTENSITY, 110, 1.6);
+    this.light = new THREE.PointLight(0x6aa8ff, PLAYER_LIGHT_INTENSITY, 110, 1.6);
     this.group.add(this.light);
 
     // Render the whole visual group ~20% smaller (agility/space) WITHOUT
