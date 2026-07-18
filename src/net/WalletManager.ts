@@ -211,6 +211,25 @@ export class WalletManager {
     })) as string;
   }
 
+  /** Send a native CRO payment on Cronos; returns the transaction hash.
+      Enforces the Cronos chain FIRST so value is never sent on another
+      network (where the native token would not be CRO). */
+  async payCRO(to: string, croAmount: number): Promise<string> {
+    if (!this.provider || !this.address) throw new Error("Wallet non connecté");
+    if (!/^0x[0-9a-fA-F]{40}$/.test(to)) throw new Error("Adresse de paiement invalide");
+    await this.switchToCronos(this.provider);
+    await this.refreshChain();
+    if (this.chainId !== SUPPORTED_CHAIN_ID)
+      throw new Error("Passe sur le réseau Cronos (Chain 25) pour payer en CRO");
+    const valueWei = BigInt(Math.trunc(croAmount)) * (10n ** 18n);
+    const valueHex = "0x" + valueWei.toString(16);
+    const hash = await this.provider.request({
+      method: "eth_sendTransaction",
+      params: [{ from: this.address, to, value: valueHex }],
+    });
+    return String(hash);
+  }
+
   async disconnect(): Promise<void> {
     this.unwatch();
     try { await this.provider?.disconnect?.(); } catch { /* injected has none */ }

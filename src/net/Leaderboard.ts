@@ -195,4 +195,51 @@ export class Leaderboard {
     else this.lastError = null;
     return ok;
   }
+
+  /** Connected wallet's rank in a period (1-based), or null if unavailable
+      (not connected / not on the board / offline). */
+  async myRank(period: LeaderboardPeriod): Promise<number | null> {
+    const addr = this.wallet.getAddress();
+    if (!this.client || !addr) return null;
+    const start = periodStartUTC(period);
+    const mineRes = await this.client
+      .from("sn_leaderboard").select("best_score")
+      .eq("wallet", addr).eq("period_type", period).eq("period_start", start)
+      .maybeSingle();
+    if (mineRes.error || !mineRes.data) return null;
+    const myScore = mineRes.data.best_score;
+    const cntRes = await this.client
+      .from("sn_leaderboard").select("*", { count: "exact", head: true })
+      .eq("period_type", period).eq("period_start", start).gt("best_score", myScore);
+    if (cntRes.error) { console.error(`${LOG} rank query failed (${period}):`, cntRes.error); return null; }
+    return (cntRes.count ?? 0) + 1;
+  }
+
+  /* ---------- offline pending submission ---------- */
+  private static PENDING_KEY = "super-novus:pending";
+
+  /** Store a score to submit later (played offline / no wallet). */
+  savePending(score: number, dist: number, dust: number): void {
+    try {
+      localStorage.setItem(Leaderboard.PENDING_KEY, JSON.stringify({ score, dist, dust }));
+      console.info(`${LOG} score stored locally — will sync when a wallet connects.`);
+    } catch { /* private mode */ }
+  }
+  hasPending(): boolean {
+    try { return localStorage.getItem(Leaderboard.PENDING_KEY) !== null; } catch { return false; }
+  }
+  /** Submit any stored pending score once a wallet is connected. */
+  async syncPending(): Promise<boolean> {
+    if (!this.client || !this.wallet.getAddress()) return false;
+    let p: { score: number; dist: number; dust: number } | null = null;
+    try {
+      const raw = localStorage.getItem(Leaderboard.PENDING_KEY);
+      if (raw) p = JSON.parse(raw);
+    } catch { /* ignore */ }
+    if (!p) return false;
+    console.info(`${LOG} syncing pending score…`, p);
+    const ok = await this.submit(p.score, p.dist, p.dust);
+    if (ok) { try { localStorage.removeItem(Leaderboard.PENDING_KEY); } catch { /* ignore */ } }
+    return ok;
+  }
 }

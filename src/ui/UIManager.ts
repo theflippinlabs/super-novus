@@ -35,8 +35,26 @@ export class UIManager {
   logoutBtn = $("logoutBtn") as HTMLButtonElement;
   saveState = $("saveState");
   lbListMenu = $("lbListMenu");
-  lbListOver = $("lbListOver");
+  bigBangBtn = $("bigBangBtn") as HTMLButtonElement;
+  menuBtn = $("menuBtn") as HTMLButtonElement;
+  newRecordBadge = $("newRecordBadge");
+  weeklyRank = $("weeklyRank");
+  monthlyRank = $("monthlyRank");
   private _tt: ReturnType<typeof setTimeout> | undefined;
+
+  /** Toggle the NEW RECORD badge on the game-over screen. */
+  showNewRecord(on: boolean): void {
+    this.newRecordBadge.style.display = on ? "block" : "none";
+  }
+
+  /** Show a weekly/monthly rank line, or hide it when rank is null. */
+  setRank(period: "weekly" | "monthly", rank: number | null): void {
+    const el = period === "weekly" ? this.weeklyRank : this.monthlyRank;
+    if (rank === null) { el.style.display = "none"; return; }
+    const label = period === "weekly" ? "CLASSEMENT SEMAINE" : "CLASSEMENT MOIS";
+    el.innerHTML = `${label} · <b>#${rank}</b>`;
+    el.style.display = "block";
+  }
 
   setStats(score: number, dist: number, dust: number): void {
     this.scoreV.textContent = Math.floor(score).toLocaleString("fr-FR");

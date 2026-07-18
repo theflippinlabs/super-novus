@@ -93,6 +93,15 @@
   .statLine.gold b{color:var(--gold)}
   #bestScore{font-size:11px;letter-spacing:3px;color:var(--dim);margin:10px 0 4px}
   #seedLine{font-size:9px;letter-spacing:2px;color:#4a5178;margin:0 0 12px;font-variant-numeric:tabular-nums}
+  #newRecordBadge{display:none;font-size:12px;letter-spacing:4px;font-weight:800;color:#ffe9a0;
+    text-shadow:0 0 16px rgba(245,197,66,.9);margin:6px 0 8px;animation:pulse 1.4s ease-in-out infinite}
+  .rankLine{display:none;font-size:12px;letter-spacing:2px;color:#c8cfe8;margin:3px 0;font-variant-numeric:tabular-nums}
+  .rankLine b{color:var(--gold);font-weight:800}
+  button.big.bigbang{margin-top:8px;color:#fff;
+    background:linear-gradient(180deg,#c3a0ff,#7a4fe0 55%,#472aa0);
+    box-shadow:0 0 34px rgba(140,90,255,.6), 0 4px 0 rgba(50,20,110,.6);font-size:14px;letter-spacing:3px}
+  button.big.bigbang:disabled{opacity:.5;filter:grayscale(.35);cursor:default}
+  #menuBtn{margin-top:14px}
   .pulse{animation:pulse 2.6s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
   @media (prefers-reduced-motion: reduce){.pulse{animation:none}}
@@ -214,24 +223,17 @@
   <div class="brand">N O V A R Y S</div>
   <h1>EXTINCTION</h1>
   <div class="sunline"></div>
+  <div id="newRecordBadge">✦ NOUVEAU RECORD ✦</div>
   <div class="statLine">SCORE <b id="finalScore">0</b></div>
   <div class="statLine">DISTANCE <b id="finalDist">0</b></div>
   <div class="statLine gold">POUSSIÈRE ★ <b id="finalDust">0</b></div>
+  <div class="rankLine" id="weeklyRank">CLASSEMENT SEMAINE · <b>#—</b></div>
+  <div class="rankLine" id="monthlyRank">CLASSEMENT MOIS · <b>#—</b></div>
   <div id="bestScore">RECORD · 0</div>
   <div id="seedLine">SEED · —</div>
   <div id="saveState" class="no"></div>
-  <div id="lb2" class="" style="margin-bottom:18px">
-    <div class="lbPanel" style="margin:0">
-      <h3>CLASSEMENT GALACTIQUE</h3>
-      <div class="lbTabs">
-        <button class="lbTab active" data-period="weekly">SEMAINE</button>
-        <button class="lbTab" data-period="monthly">MOIS</button>
-      </div>
-      <div class="lbPrize">🏆 TOP 1 · $50 <span>— compétition hebdo</span></div>
-      <div id="lbListOver"><div class="lbEmpty">—</div></div>
-    </div>
-  </div>
-  <button class="big" id="retryBtn">RENAÎTRE</button>
+  <button class="big bigbang" id="bigBangBtn">🌌 BIG BANG — CONTINUER · 10 CRO</button>
+  <button class="mini" id="menuBtn">RETOUR AU MENU</button>
 </div>
 
 <script type="module" src="/src/main.ts"></script>

@@ -27,6 +27,7 @@ import {
   FOV_NOVA_PUNCH, TONE_EXPOSURE, TONE_EXPOSURE_NOVA,
   DOUBLE_TAP_DELAY, DOUBLE_TAP_MAX_DIST, TAP_MAX_MOVE,
   NOVA_RADIUS, LEVEL_DURATION,
+  BIG_BANG_PRICE_CRO, BIG_BANG_RECIPIENT, BIG_BANG_INVULN,
 } from "../config";
 
 export class GameEngine {
@@ -115,7 +116,12 @@ export class GameEngine {
     this.lbPeriod = "weekly";      // "weekly" | "monthly"
     this._bindLbTabs();
     const refresh = () => this.ui.setAuth(this.wallet.getAddress(), this.wallet.available, this.wallet.getChainId());
-    this.wallet.onChange(() => { refresh(); this._refreshBoards(); });
+    this.wallet.onChange(() => {
+      refresh();
+      // A wallet just (re)connected → push any score stored while offline.
+      this.leaderboard.syncPending().then((ok) => { if (ok) this._refreshBoards(); });
+      this._refreshBoards();
+    });
     refresh();
     this.leaderboard.diagnose();   // logs exact Supabase connectivity status on boot
     await this._refreshBoards();
@@ -144,12 +150,10 @@ export class GameEngine {
     const me = this.wallet.getAddress();
     if (!this.leaderboard.available){
       this.ui.boardMessage(this.ui.lbListMenu, "Classement en ligne bientôt disponible");
-      this.ui.boardMessage(this.ui.lbListOver, "Classement en ligne bientôt disponible");
       return;
     }
     const rows = await this.leaderboard.top(this.lbPeriod, 10);
     this.ui.renderBoard(this.ui.lbListMenu, rows, me);
-    this.ui.renderBoard(this.ui.lbListOver, rows, me);
   }
 
   _bindInput(){
@@ -206,7 +210,9 @@ export class GameEngine {
 
   _bindUI(){
     this.ui.playBtn.addEventListener("click", () => { this.audio.init(); this.start(); });
-    document.getElementById("retryBtn")!.addEventListener("click", () => this.start());
+    // Game Over — two choices only: Big Bang (paid continue) or Return to Menu.
+    this.ui.bigBangBtn.addEventListener("click", () => this._buyBigBang());
+    this.ui.menuBtn.addEventListener("click", () => this._returnToMenu());
     this.ui.pauseBtn.addEventListener("click", () => {
       if (!this.running) return;
       this.paused = true;
@@ -429,28 +435,126 @@ export class GameEngine {
     this.ui.flashWhite(160);
 
     const finalScore = Math.floor(this.score);
-    const localBest = this.leaderboard.saveLocalBest(finalScore, Math.floor(this.dist), this.dust);
-    /* enregistrement + classement pendant l'animation */
+    const finalDist = Math.floor(this.dist);
+    const prevBest = this.best;
+    const localBest = this.leaderboard.saveLocalBest(finalScore, finalDist, this.dust);
+    const isNewRecord = finalScore > prevBest && finalScore > 0;
+    this.best = Math.max(this.best, finalScore, localBest.score);
+
+    // Submit BEFORE leaving the screen (if a wallet is connected); otherwise
+    // store locally so it auto-syncs when a wallet reconnects.
     let saved = false;
-    if (this.leaderboard.pseudo)
-      saved = await this.leaderboard.submit(finalScore, Math.floor(this.dist), this.dust);
+    const hasWallet = Boolean(this.leaderboard.pseudo);
+    if (hasWallet) saved = await this.leaderboard.submit(finalScore, finalDist, this.dust);
+    else if (this.leaderboard.available && finalScore > 0)
+      this.leaderboard.savePending(finalScore, finalDist, this.dust);
+
+    // Ranks only make sense once the score is on the board.
+    let weeklyR: number | null = null, monthlyR: number | null = null;
+    if (saved){
+      weeklyR = await this.leaderboard.myRank("weekly");
+      monthlyR = await this.leaderboard.myRank("monthly");
+    }
 
     setTimeout(() => {
-      this.best = Math.max(this.best, finalScore, localBest.score);
       document.getElementById("finalScore")!.textContent = finalScore.toLocaleString("fr-FR");
-      document.getElementById("finalDist")!.textContent = Math.floor(this.dist).toLocaleString("fr-FR") + " m";
+      document.getElementById("finalDist")!.textContent = finalDist.toLocaleString("fr-FR") + " m";
       document.getElementById("finalDust")!.textContent = this.dust;
       document.getElementById("bestScore")!.textContent = "RECORD · " + this.best.toLocaleString("fr-FR");
       document.getElementById("seedLine")!.textContent = "SEED · " + this.spawn.seed;
+      this.ui.showNewRecord(isNewRecord);
+      this.ui.setRank("weekly", weeklyR);
+      this.ui.setRank("monthly", monthlyR);
       const ss = this.ui.saveState;
       if (saved){ ss.textContent = "SCORE ENREGISTRÉ ✓"; ss.className = "ok"; }
-      else if (this.leaderboard.available){ ss.textContent = "CONNECTE TON WALLET POUR ENREGISTRER TON SCORE"; ss.className = "no"; }
+      else if (hasWallet){ ss.textContent = "Enregistrement impossible — réessaie."; ss.className = "no"; }
+      else if (this.leaderboard.available){ ss.textContent = "Score sauvegardé — connecte un wallet pour le classer."; ss.className = "no"; }
       else { ss.textContent = "Classement en ligne bientôt disponible"; ss.className = "no"; }
+      this._updateBigBangButton();
       this.ui.gameover.style.display = "flex";
       this.ui.hud.style.display = "none";
       this.ui.pauseBtn.style.display = "none";
-      this._refreshBoards();   // fills both panels with the current period (incl. new score)
+      this._refreshBoards();
     }, 1400);
+  }
+
+  /** Reflect Big Bang availability (needs a connected wallet + a configured
+      recipient address). */
+  _updateBigBangButton(){
+    const btn = this.ui.bigBangBtn;
+    const price = `${BIG_BANG_PRICE_CRO} CRO`;
+    if (!BIG_BANG_RECIPIENT){
+      btn.textContent = "🌌 BIG BANG — bientôt disponible";
+      btn.disabled = true;
+    } else if (!this.wallet.getAddress()){
+      btn.textContent = `🌌 BIG BANG · ${price} — connecte un wallet`;
+      btn.disabled = true;
+    } else {
+      btn.textContent = `🌌 BIG BANG — CONTINUER · ${price}`;
+      btn.disabled = false;
+    }
+  }
+
+  /** OPTION 1 — pay the CRO price, then revive in place and continue the run. */
+  async _buyBigBang(){
+    if (!BIG_BANG_RECIPIENT || !this.wallet.getAddress()) return;
+    const btn = this.ui.bigBangBtn;
+    btn.disabled = true;
+    btn.textContent = "Paiement en cours…";
+    try {
+      await this.wallet.payCRO(BIG_BANG_RECIPIENT, BIG_BANG_PRICE_CRO);
+      this._bigBangRevive();
+    } catch (e){
+      const msg = e instanceof Error ? e.message : String(e);
+      const rejected = /reject|denied|refus|cancel|annul|4001/i.test(msg);
+      btn.textContent = rejected ? "Paiement annulé" : "Paiement échoué — réessaie";
+      console.warn("[BigBang] payment failed:", msg);
+      setTimeout(() => this._updateBigBangButton(), 1800);
+    }
+  }
+
+  /** Revive exactly where the player died, keeping score/dist/dust/level/energy;
+      clears the immediate area and grants temporary invulnerability. */
+  _bigBangRevive(){
+    if (this._deathRing){ this.scene.remove(this._deathRing.mesh); this._deathRing = null; }
+    const zAtDeath = this.player.pos.z;
+    // Recenter for a safe respawn, then clear nearby threats (no score awarded).
+    this.player.pos.x = 0; this.player.pos.y = 0;
+    for (let i = this.obstacles.list.length - 1; i >= 0; i--){
+      const o = this.obstacles.list[i];
+      if (o.kind !== "rock" && o.kind !== "comet" && o.kind !== "debris") continue;
+      const ox = o.mesh ? o.mesh.position.x : o.x;
+      const oy = o.mesh ? o.mesh.position.y : o.y;
+      const oz = o.mesh ? o.mesh.position.z : o.z;
+      if (Math.hypot(ox, oy) <= 30 && (oz - zAtDeath) <= 8 && (oz - zAtDeath) >= -45)
+        this.obstacles.removeAndExplode(i, this.particles);
+    }
+    const p = this.player.pos.clone();
+    this.particles.burst(p, 90, 46, 3.2, 0xc3a0ff, 1);
+    this.particles.burst(p, 40, 26, 1.8, 0xffffff, 1);
+    this.audio.boom(true);
+    this.ui.flashNova();
+    this.shake = 1.2;
+
+    this.player.invuln = BIG_BANG_INVULN;   // temporary invulnerability
+    this.player.group.visible = true;
+    this.lives = 1;                          // revived with one life
+    this.ui.setLives(this.lives, CFG.lives);
+
+    // Resume the SAME run — score/dist/dust/level/energy/levelT untouched.
+    this.ui.gameover.style.display = "none";
+    this.ui.hud.style.display = "block";
+    this.ui.pauseBtn.style.display = "flex";
+    this.running = true; this.paused = false;
+    this.clock.getDelta();
+  }
+
+  /** OPTION 2 — back to the title screen. A new run starts only on Play. */
+  _returnToMenu(){
+    if (this._deathRing){ this.scene.remove(this._deathRing.mesh); this._deathRing = null; }
+    this.ui.gameover.style.display = "none";
+    this.ui.menu.style.display = "flex";
+    this._refreshBoards();
   }
 
   _loop(){
