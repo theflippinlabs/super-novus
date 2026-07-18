@@ -106,6 +106,11 @@ export const CRONOS_PARAMS = {
 // --- Leaderboard ---
 export const LEADERBOARD_TOP_N = 10;
 export const LOCAL_SAVE_KEY = "super-novus:best";
+// Supabase project (public values — the URL and the publishable/anon key are
+// designed to ship in the frontend, protected by RLS). VITE_SUPABASE_URL /
+// VITE_SUPABASE_ANON_KEY env vars override these defaults when set.
+export const SUPABASE_URL_DEFAULT = "https://xmjqrnlmcvrltjzuptao.supabase.co";
+export const SUPABASE_ANON_KEY_DEFAULT = "sb_publishable_4EM-qnipoN_8LZJhVHLv1A_Cigm8DlR";
 export const LEADERBOARD_PERIODS = ["weekly", "monthly"] as const;
 export type LeaderboardPeriod = (typeof LEADERBOARD_PERIODS)[number];
 export const WEEKLY_PRIZE_USD = 50;   // displayed only; no prize distribution logic

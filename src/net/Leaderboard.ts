@@ -6,7 +6,7 @@
    `available` is false without env config: UI shows an explicit state, guest
    mode stays playable, zero mock data. */
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
-import { LOCAL_SAVE_KEY, type LeaderboardPeriod } from "../config";
+import { LOCAL_SAVE_KEY, SUPABASE_URL_DEFAULT, SUPABASE_ANON_KEY_DEFAULT, type LeaderboardPeriod } from "../config";
 import { WalletManager, shortAddr } from "./WalletManager";
 
 export interface BoardRow { pseudo: string; wallet: string; score: number; dist: number; dust: number; }
@@ -41,8 +41,8 @@ export class Leaderboard {
     this.initClient();
   }
 
-  private get envUrl(): string { return (import.meta.env.VITE_SUPABASE_URL as string | undefined) ?? ""; }
-  private get envKey(): string { return (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) ?? ""; }
+  private get envUrl(): string { return (import.meta.env.VITE_SUPABASE_URL as string | undefined) || SUPABASE_URL_DEFAULT; }
+  private get envKey(): string { return (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || SUPABASE_ANON_KEY_DEFAULT; }
 
   /** Initialise the Supabase client. Logs whether each env var is present
       (values are never logged). */
