@@ -107,17 +107,43 @@ export class GameEngine {
   }
 
   async _initAuth(){
+    this.lbPeriod = "weekly";      // "weekly" | "monthly"
+    this._bindLbTabs();
     const refresh = () => this.ui.setAuth(this.wallet.getAddress(), this.wallet.available, this.wallet.getChainId());
-    this.wallet.onChange(refresh);
+    this.wallet.onChange(() => { refresh(); this._refreshBoards(); });
     refresh();
-    if (this.leaderboard.available)
-      this.ui.renderBoard(this.ui.lbListMenu, await this.leaderboard.top(8), this.wallet.getAddress());
-    else
-      this.ui.hideBoards();
+    await this._refreshBoards();
     // best local (offline-first) affiché dès le menu
     this.best = this.leaderboard.getLocalBest().score;
-    const addr = await this.wallet.tryReconnect();
-    if (addr) refresh();
+    const addr = await this.wallet.tryReconnect();  // silent injected/WC reconnect
+    if (addr){ refresh(); this._refreshBoards(); }
+  }
+
+  /** Weekly/monthly tab clicks across both leaderboard panels. */
+  _bindLbTabs(){
+    for (const btn of document.querySelectorAll<HTMLButtonElement>(".lbTab")){
+      btn.addEventListener("click", () => {
+        const period = btn.dataset.period;
+        if (!period || period === this.lbPeriod) return;
+        this.lbPeriod = period;
+        this.ui.setLbTab(period);
+        this._refreshBoards();
+      });
+    }
+  }
+
+  /** Fetch the current period's board once and render it into both panels.
+      Explicit, non-blocking state when the online leaderboard isn't configured. */
+  async _refreshBoards(){
+    const me = this.wallet.getAddress();
+    if (!this.leaderboard.available){
+      this.ui.boardMessage(this.ui.lbListMenu, "Classement en ligne bientôt disponible");
+      this.ui.boardMessage(this.ui.lbListOver, "Classement en ligne bientôt disponible");
+      return;
+    }
+    const rows = await this.leaderboard.top(this.lbPeriod, 10);
+    this.ui.renderBoard(this.ui.lbListMenu, rows, me);
+    this.ui.renderBoard(this.ui.lbListOver, rows, me);
   }
 
   _bindInput(){
@@ -194,8 +220,7 @@ export class GameEngine {
       try {
         await this.wallet.connect();
         this.ui.setAuth(this.wallet.getAddress(), this.wallet.available, this.wallet.getChainId());
-        if (this.leaderboard.available)
-          this.ui.renderBoard(this.ui.lbListMenu, await this.leaderboard.top(8), this.wallet.getAddress());
+        await this._refreshBoards();
       } catch (e) {
         this.ui.setAuth(null, this.wallet.available, null);
         this.ui.setWalletError(e instanceof Error ? e.message : "erreur inconnue");
@@ -206,6 +231,7 @@ export class GameEngine {
     this.ui.logoutBtn.addEventListener("click", async () => {
       await this.wallet.disconnect();
       this.ui.setAuth(null, this.wallet.available, null);
+      this._refreshBoards();
     });
   }
 
@@ -390,7 +416,6 @@ export class GameEngine {
     let saved = false;
     if (this.leaderboard.pseudo)
       saved = await this.leaderboard.submit(finalScore, Math.floor(this.dist), this.dust);
-    const top = this.leaderboard.available ? await this.leaderboard.top(8) : [];
 
     setTimeout(() => {
       this.best = Math.max(this.best, finalScore, localBest.score);
@@ -402,13 +427,11 @@ export class GameEngine {
       const ss = this.ui.saveState;
       if (saved){ ss.textContent = "SCORE ENREGISTRÉ ✓"; ss.className = "ok"; }
       else if (this.leaderboard.available){ ss.textContent = "CONNECTE TON WALLET POUR ENREGISTRER TON SCORE"; ss.className = "no"; }
-      else { ss.textContent = ""; ss.className = "no"; }
-      this.ui.renderBoard(this.ui.lbListOver, top, this.wallet.getAddress());
+      else { ss.textContent = "Classement en ligne bientôt disponible"; ss.className = "no"; }
       this.ui.gameover.style.display = "flex";
       this.ui.hud.style.display = "none";
       this.ui.pauseBtn.style.display = "none";
-      if (this.leaderboard.available)
-        this.leaderboard.top(8).then((rows: any) => this.ui.renderBoard(this.ui.lbListMenu, rows, this.wallet.getAddress()));
+      this._refreshBoards();   // fills both panels with the current period (incl. new score)
     }, 1400);
   }
 

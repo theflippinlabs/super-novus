@@ -121,7 +121,17 @@
   .lbRow .pts{color:var(--gold);font-weight:800;margin-left:10px}
   .lbRow.me{background:rgba(245,197,66,.1);border-radius:6px}
   .lbRow.me .name{color:var(--gold)}
+  .lbRow .who{display:flex;flex-direction:column;flex:1;min-width:0;text-align:left}
+  .lbRow .sub{font-size:9px;letter-spacing:.5px;color:#5a6288;font-weight:600;margin-top:1px}
+  .lbRow.me .sub{color:#b99a4e}
   .lbEmpty{font-size:11px;color:#5a6288;letter-spacing:1px;padding:6px 0}
+  .lbTabs{display:flex;gap:6px;margin:0 0 8px}
+  .lbTab{flex:1;pointer-events:auto;font-family:inherit;font-size:10px;letter-spacing:2px;font-weight:700;
+    padding:7px 0;color:var(--dim);background:rgba(30,40,80,.4);border:1px solid rgba(140,170,255,.18);
+    border-radius:8px;cursor:pointer}
+  .lbTab.active{color:#050418;background:linear-gradient(180deg,#FFEDB0,var(--gold) 60%,#D89B1E);border-color:transparent}
+  .lbPrize{font-size:10px;letter-spacing:1.5px;color:var(--gold);font-weight:700;margin:0 0 8px;text-align:center}
+  .lbPrize span{color:#c8cfe8;font-weight:600}
 
   #whiteout{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9}
   #novaFlash{position:fixed;inset:0;opacity:0;pointer-events:none;z-index:9;
@@ -178,6 +188,11 @@
 
   <div class="lbPanel" style="margin-top:22px">
     <h3>CLASSEMENT GALACTIQUE</h3>
+    <div class="lbTabs">
+      <button class="lbTab active" data-period="weekly">SEMAINE</button>
+      <button class="lbTab" data-period="monthly">MOIS</button>
+    </div>
+    <div class="lbPrize">🏆 TOP 1 · $50 <span>— compétition hebdo</span></div>
     <div id="lbListMenu"><div class="lbEmpty">Chargement…</div></div>
   </div>
 </div>
@@ -202,6 +217,11 @@
   <div id="lb2" class="" style="margin-bottom:18px">
     <div class="lbPanel" style="margin:0">
       <h3>CLASSEMENT GALACTIQUE</h3>
+      <div class="lbTabs">
+        <button class="lbTab active" data-period="weekly">SEMAINE</button>
+        <button class="lbTab" data-period="monthly">MOIS</button>
+      </div>
+      <div class="lbPrize">🏆 TOP 1 · $50 <span>— compétition hebdo</span></div>
       <div id="lbListOver"><div class="lbEmpty">—</div></div>
     </div>
   </div>

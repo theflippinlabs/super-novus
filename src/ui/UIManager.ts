@@ -128,19 +128,34 @@ export class UIManager {
 
   renderBoard(el: HTMLElement, rows: BoardRow[], meWallet: string | null): void {
     if (!rows.length) {
-      el.innerHTML = `<div class="lbEmpty">Aucun score — sois le premier !</div>`;
+      el.innerHTML = `<div class="lbEmpty">Aucun score cette période — sois le premier !</div>`;
       return;
     }
+    const esc = (s: string) => s.replace(/[<>&]/g, "");
     el.innerHTML = rows
       .map(
         (r, i) => `
       <div class="lbRow${r.wallet === meWallet ? " me" : ""}">
         <span class="rank">${i + 1}</span>
-        <span class="name">${r.pseudo.replace(/[<>&]/g, "")}</span>
+        <span class="who">
+          <span class="name">${esc(r.pseudo)}</span>
+          <span class="sub">${Math.floor(r.dist).toLocaleString("fr-FR")} m · ★ ${Math.floor(r.dust)}</span>
+        </span>
         <span class="pts">${Math.floor(r.score).toLocaleString("fr-FR")}</span>
       </div>`,
       )
       .join("");
+  }
+
+  /** Explicit, non-blocking message in a board (e.g. server not configured). */
+  boardMessage(el: HTMLElement, msg: string): void {
+    el.innerHTML = `<div class="lbEmpty">${msg}</div>`;
+  }
+
+  /** Reflect the active weekly/monthly tab across both panels. */
+  setLbTab(period: string): void {
+    for (const btn of document.querySelectorAll<HTMLElement>(".lbTab"))
+      btn.classList.toggle("active", btn.dataset.period === period);
   }
 
   hideBoards(): void {

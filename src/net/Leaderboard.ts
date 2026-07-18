@@ -1,11 +1,25 @@
 /* Leaderboard — real Supabase reads + signed submission via Edge Function.
    Offline-first local best (localStorage) that must never be lost.
    `available` is false without env config: UI hides boards, zero mock data. */
-import { LOCAL_SAVE_KEY } from "../config";
+import { LOCAL_SAVE_KEY, type LeaderboardPeriod } from "../config";
 import { WalletManager, shortAddr } from "./WalletManager";
 
 export interface BoardRow { pseudo: string; wallet: string; score: number; dist: number; dust: number; }
 export interface LocalBest { v: 1; score: number; dist: number; dust: number; }
+
+/** Current period boundaries in UTC — must match the Edge Function exactly.
+    Monday 00:00 UTC for weekly, the 1st for monthly. */
+export function weekStartUTC(d: Date = new Date()): string {
+  const diff = (d.getUTCDay() + 6) % 7; // days since Monday
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() - diff))
+    .toISOString().slice(0, 10);
+}
+export function monthStartUTC(d: Date = new Date()): string {
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1)).toISOString().slice(0, 10);
+}
+export function periodStartUTC(period: LeaderboardPeriod): string {
+  return period === "weekly" ? weekStartUTC() : monthStartUTC();
+}
 
 export class Leaderboard {
   private wallet: WalletManager;
@@ -50,11 +64,15 @@ export class Leaderboard {
   }
 
   /* ---------- server ---------- */
-  async top(n = 10): Promise<BoardRow[]> {
+  /** Top N of the CURRENT weekly or monthly period. Past periods stay in the
+      table (archived) and can be read by passing a historical period_start. */
+  async top(period: LeaderboardPeriod, n = 10, periodStart?: string): Promise<BoardRow[]> {
     if (!this.available) return [];
+    const start = periodStart ?? periodStartUTC(period);
     try {
       const r = await fetch(
-        `${this.url}/rest/v1/sn_scores?select=wallet,best_score,best_dist,best_dust&order=best_score.desc&limit=${n}`,
+        `${this.url}/rest/v1/sn_leaderboard?select=wallet,best_score,best_dist,best_dust` +
+          `&period_type=eq.${period}&period_start=eq.${start}&order=best_score.desc&limit=${n}`,
         { headers: { apikey: this.anonKey, Authorization: `Bearer ${this.anonKey}` } },
       );
       if (!r.ok) return [];
