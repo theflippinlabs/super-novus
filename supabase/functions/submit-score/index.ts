@@ -1,5 +1,5 @@
 // SUPER NOVUS — submit-score Edge Function (Deno / Supabase)
-// redeploy: v4 — robust signature verification (EOA recover + EIP-1271/6492).
+// redeploy: v5 — robust signature verification (EOA recover + EIP-1271/6492 + direct 1271).
 // Verifies an EIP-191 signature, rate-limits, records the submission, and
 // upserts the wallet's best score into the current WEEKLY and MONTHLY periods.
 // Deploy: supabase functions deploy submit-score --no-verify-jwt
@@ -11,7 +11,7 @@
 // of scope. Guest players (no wallet) cannot submit and never appear in ranks.
 
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.0";
-import { createPublicClient, http, recoverMessageAddress } from "https://esm.sh/viem@2.9.0";
+import { createPublicClient, encodeFunctionData, hashMessage, http, recoverMessageAddress } from "https://esm.sh/viem@2.9.0";
 
 const CORS = {
   "Access-Control-Allow-Origin": "*",
@@ -46,17 +46,35 @@ async function verifySignature(
   }
   if (recovered && recovered === expected) return { valid: true, recovered };
 
-  // Fallback: smart-contract wallet signature (EIP-1271 / EIP-6492) on Cronos.
+  // Fallback A: viem's universal (EIP-6492/1271) verification via a deployless call.
+  const client = createPublicClient({ transport: http(RPC_URL) });
   try {
-    const client = createPublicClient({ transport: http(RPC_URL) });
-    const ok = await client.verifyMessage({
-      address: wallet as `0x${string}`,
-      message,
-      signature,
-    });
-    if (ok) return { valid: true, recovered };
+    if (await client.verifyMessage({ address: wallet as `0x${string}`, message, signature })) {
+      return { valid: true, recovered };
+    }
   } catch (e) {
-    console.error("on-chain (EIP-1271) verify failed:", e);
+    console.error("on-chain universal verify failed:", e);
+  }
+
+  // Fallback B: direct EIP-1271 isValidSignature(bytes32,bytes) → magic 0x1626ba7e.
+  // A plain eth_call to the account contract; works even where deployless calls
+  // aren't supported by the RPC, as long as the smart account exists on Cronos.
+  try {
+    const data = encodeFunctionData({
+      abi: [{
+        name: "isValidSignature", type: "function", stateMutability: "view",
+        inputs: [{ name: "hash", type: "bytes32" }, { name: "signature", type: "bytes" }],
+        outputs: [{ name: "", type: "bytes4" }],
+      }],
+      functionName: "isValidSignature",
+      args: [hashMessage(message), signature],
+    });
+    const res = await client.call({ to: wallet as `0x${string}`, data });
+    if (typeof res?.data === "string" && res.data.toLowerCase().startsWith("0x1626ba7e")) {
+      return { valid: true, recovered };
+    }
+  } catch (e) {
+    console.error("direct EIP-1271 isValidSignature failed:", e);
   }
   return { valid: false, recovered };
 }
