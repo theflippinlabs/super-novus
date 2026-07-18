@@ -27,7 +27,6 @@ import { AdminPanel } from "../ui/AdminPanel";
 import { Profile } from "../net/Profile";
 import { ProfilePanel } from "../ui/ProfilePanel";
 import { Joystick } from "../input/Joystick";
-import { generateAvatar } from "../ui/Avatar";
 import { i18n } from "../i18n";
 import {
   STAR_DUST_ENERGY, STAR_ENERGY_MAX,
@@ -230,13 +229,11 @@ export class GameEngine {
     const addr = this.wallet.getAddress();
     if (!addr){ this.ui.setProfileIdentity(false, null, null); return; }
     const cached = this.profile.cachedIdentity(addr);
-    const genAvatar = generateAvatar(addr, 64);
-    this.ui.setProfileIdentity(true, cached.avatar || genAvatar, cached.nickname);
-    // Hydrate from Supabase, then refine the chip + auth note.
+    // Pass only a CUSTOM avatar; null falls back to the official icon (CSS default).
+    this.ui.setProfileIdentity(true, cached.avatar, cached.nickname);
     const row = await this.profile.get();
     const nick = row?.nickname ?? cached.nickname ?? null;
-    const avatar = row?.avatar_url || cached.avatar || genAvatar;
-    this.ui.setProfileIdentity(true, avatar, nick);
+    this.ui.setProfileIdentity(true, row?.avatar_url ?? cached.avatar ?? null, nick);
     this.ui.setAuth(addr, this.wallet.available, this.wallet.getChainId(), nick);
   }
 
@@ -257,7 +254,7 @@ export class GameEngine {
       this.ui.boardMessage(this.ui.lbListMenu, "Classement en ligne bientôt disponible");
       return;
     }
-    const rows = await this.leaderboard.top(this.lbPeriod, 10);
+    const rows = await this.leaderboard.top(this.lbPeriod, 3);   // compact one-screen preview
     this.ui.renderBoard(this.ui.lbListMenu, rows, me);
   }
 
@@ -357,12 +354,8 @@ export class GameEngine {
         this.ui.walletBtn.disabled = !this.wallet.available;
       }
     });
-    this.ui.logoutBtn.addEventListener("click", async () => {
-      await this.wallet.disconnect();
-      this.ui.setAuth(null, this.wallet.available, null);
-      this.ui.setProfileIdentity(false, null, null);
-      this._refreshBoards();
-    });
+    // Wallet status chip (avatar + nickname) opens the profile — disconnect lives there.
+    this.ui.walletStatus.addEventListener("click", () => this._openProfile());
 
     // Language selector (instant switch, persisted).
     for (const b of document.querySelectorAll<HTMLButtonElement>(".langBtn"))
