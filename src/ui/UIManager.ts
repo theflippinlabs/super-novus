@@ -36,6 +36,7 @@ export class UIManager {
   saveState = $("saveState");
   lbListMenu = $("lbListMenu");
   bigBangBtn = $("bigBangBtn") as HTMLButtonElement;
+  bigBangCount = $("bigBangCount");
   menuBtn = $("menuBtn") as HTMLButtonElement;
   newRecordBadge = $("newRecordBadge");
   weeklyRank = $("weeklyRank");
@@ -45,6 +46,11 @@ export class UIManager {
   /** Toggle the NEW RECORD badge on the game-over screen. */
   showNewRecord(on: boolean): void {
     this.newRecordBadge.style.display = on ? "block" : "none";
+  }
+
+  /** Show Big Bang usage this run (e.g. 1/3). */
+  setBigBangCount(used: number, max: number): void {
+    this.bigBangCount.textContent = `BIG BANGS · ${used}/${max}`;
   }
 
   /** Show a weekly/monthly rank line, or hide it when rank is null. */
@@ -165,7 +171,7 @@ export class UIManager {
         <span class="rank">${i + 1}</span>
         <span class="who">
           <span class="name">${esc(r.pseudo)}</span>
-          <span class="sub">${Math.floor(r.dist).toLocaleString("fr-FR")} m · ★ ${Math.floor(r.dust)}</span>
+          <span class="sub">${Math.floor(r.dist).toLocaleString("fr-FR")} m · ★ ${Math.floor(r.dust)}${r.bigBangs ? ` · 🌌${r.bigBangs}` : ""}</span>
         </span>
         <span class="pts">${Math.floor(r.score).toLocaleString("fr-FR")}</span>
       </div>`,

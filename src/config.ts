@@ -89,11 +89,12 @@ export const TOUCH_Y_FRACTION = 0.55;  // (REF) screen height for full field Y
 export const LIVES = 3;
 
 // --- Big Bang (paid continue) ---
-export const BIG_BANG_PRICE_CRO = 10;        // native CRO on Cronos
-export const BIG_BANG_INVULN = 3.0;          // seconds of invulnerability on revive
-// Cronos treasury that RECEIVES the 10 CRO. MUST be set (0x… address) for the
-// paid continue to work; empty = Big Bang shown but payment not yet configured.
-export const BIG_BANG_RECIPIENT = "";
+// Up to 3 revives per run with escalating price: #1=10, #2=20, #3=40 CRO.
+export const BIG_BANG_PRICES = [10, 20, 40] as const; // native CRO on Cronos, per revive
+export const BIG_BANG_MAX = BIG_BANG_PRICES.length;   // 3
+export const BIG_BANG_INVULN = 3.0;                   // seconds of invulnerability on revive
+// Cronos treasury that RECEIVES the CRO payment.
+export const BIG_BANG_RECIPIENT = "0x277B7CAD86D0f56Ae547533934dceA365ac7D7Bf";
 
 // --- Wallet / chain ---
 export const SUPPORTED_CHAIN_ID = 25;  // Cronos

@@ -40,6 +40,8 @@ Deno.serve(async (req) => {
   try { body = await req.json(); } catch { return json({ error: "bad json" }, 400); }
 
   const { wallet, score, dist, dust, ts, signature } = body ?? {};
+  // Big Bang count is informational (not part of the signed message); clamp it.
+  const bigBangs = Math.max(0, Math.min(3, Math.floor(Number((body ?? {}).bigbangs) || 0)));
   if (typeof wallet !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(wallet))
     return json({ error: "wallet" }, 400);
   for (const [k, v] of [["score", score], ["dist", dist], ["dust", dust], ["ts", ts]]) {
@@ -78,7 +80,7 @@ Deno.serve(async (req) => {
   if (last && Date.now() - new Date(last.submitted_at).getTime() < RATE_LIMIT_SECONDS * 1000)
     return json({ error: "rate limited" }, 429);
 
-  await supabase.from("sn_score_submissions").insert({ wallet, score, dist, dust });
+  await supabase.from("sn_score_submissions").insert({ wallet, score, dist, dust, big_bangs: bigBangs });
 
   // 5) upsert best into the current weekly + monthly periods
   const now = new Date();
@@ -106,6 +108,7 @@ Deno.serve(async (req) => {
           best_score: score,
           best_dist: dist,
           best_dust: dust,
+          big_bangs: bigBangs,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "wallet,period_type,period_start" },

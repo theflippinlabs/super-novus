@@ -27,7 +27,7 @@ import {
   FOV_NOVA_PUNCH, TONE_EXPOSURE, TONE_EXPOSURE_NOVA,
   DOUBLE_TAP_DELAY, DOUBLE_TAP_MAX_DIST, TAP_MAX_MOVE,
   NOVA_RADIUS, LEVEL_DURATION,
-  BIG_BANG_PRICE_CRO, BIG_BANG_RECIPIENT, BIG_BANG_INVULN,
+  BIG_BANG_PRICES, BIG_BANG_MAX, BIG_BANG_RECIPIENT, BIG_BANG_INVULN,
 } from "../config";
 
 export class GameEngine {
@@ -78,7 +78,7 @@ export class GameEngine {
 
     this.running = false; this.paused = false;
     this.score = 0; this.dist = 0; this.dust = 0; this.best = 0;
-    this.energy = 0; this.charged = false;
+    this.energy = 0; this.charged = false; this.bigBangs = 0;
     this.lives = CFG.lives; this.level = 1;
     this.speed = CFG.baseSpeed;
     this.shake = 0; this.timeScale = 1; this.slowmoT = 0;
@@ -263,6 +263,7 @@ export class GameEngine {
     this.env.clearDecor();
     this.trail.reset();
     this.score = 0; this.dist = 0; this.dust = 0;
+    this.bigBangs = 0;   // Big Bang revives used this run (max 3)
     this.energy = 0; this.charged = false;
     this.player.setCharged(false);
     this.ui.setEnergy(0); this.ui.setNovaReady(false);
@@ -445,9 +446,9 @@ export class GameEngine {
     // store locally so it auto-syncs when a wallet reconnects.
     let saved = false;
     const hasWallet = Boolean(this.leaderboard.pseudo);
-    if (hasWallet) saved = await this.leaderboard.submit(finalScore, finalDist, this.dust);
+    if (hasWallet) saved = await this.leaderboard.submit(finalScore, finalDist, this.dust, this.bigBangs);
     else if (this.leaderboard.available && finalScore > 0)
-      this.leaderboard.savePending(finalScore, finalDist, this.dust);
+      this.leaderboard.savePending(finalScore, finalDist, this.dust, this.bigBangs);
 
     // Ranks only make sense once the score is on the board.
     let weeklyR: number | null = null, monthlyR: number | null = null;
@@ -478,31 +479,41 @@ export class GameEngine {
     }, 1400);
   }
 
-  /** Reflect Big Bang availability (needs a connected wallet + a configured
-      recipient address). */
+  /** Reflect Big Bang state: dynamic price per revive (#1/#2/#3), usage count,
+      and the permanent "max reached" state after the 3rd. */
   _updateBigBangButton(){
     const btn = this.ui.bigBangBtn;
-    const price = `${BIG_BANG_PRICE_CRO} CRO`;
+    this.ui.setBigBangCount(this.bigBangs, BIG_BANG_MAX);
+    if (this.bigBangs >= BIG_BANG_MAX){
+      btn.textContent = "Maximum Big Bangs reached.";
+      btn.disabled = true;
+      return;
+    }
+    const n = this.bigBangs + 1;                 // this purchase would be #n
+    const price = BIG_BANG_PRICES[this.bigBangs]; // 10 / 20 / 40
     if (!BIG_BANG_RECIPIENT){
-      btn.textContent = "🌌 BIG BANG — bientôt disponible";
+      btn.textContent = `🌌 BIG BANG #${n} — bientôt disponible`;
       btn.disabled = true;
     } else if (!this.wallet.getAddress()){
-      btn.textContent = `🌌 BIG BANG · ${price} — connecte un wallet`;
+      btn.textContent = `🌌 BIG BANG #${n} · ${price} CRO — connecte un wallet`;
       btn.disabled = true;
     } else {
-      btn.textContent = `🌌 BIG BANG — CONTINUER · ${price}`;
+      btn.textContent = `🌌 BIG BANG #${n} — ${price} CRO`;
       btn.disabled = false;
     }
   }
 
-  /** OPTION 1 — pay the CRO price, then revive in place and continue the run. */
+  /** OPTION 1 — pay the escalating CRO price, then revive and continue. */
   async _buyBigBang(){
     if (!BIG_BANG_RECIPIENT || !this.wallet.getAddress()) return;
+    if (this.bigBangs >= BIG_BANG_MAX) return;
     const btn = this.ui.bigBangBtn;
+    const price = BIG_BANG_PRICES[this.bigBangs];
     btn.disabled = true;
     btn.textContent = "Paiement en cours…";
     try {
-      await this.wallet.payCRO(BIG_BANG_RECIPIENT, BIG_BANG_PRICE_CRO);
+      await this.wallet.payCRO(BIG_BANG_RECIPIENT, price);
+      this.bigBangs++;                 // count this revive
       this._bigBangRevive();
     } catch (e){
       const msg = e instanceof Error ? e.message : String(e);

@@ -9,7 +9,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { LOCAL_SAVE_KEY, SUPABASE_URL_DEFAULT, SUPABASE_ANON_KEY_DEFAULT, type LeaderboardPeriod } from "../config";
 import { WalletManager, shortAddr } from "./WalletManager";
 
-export interface BoardRow { pseudo: string; wallet: string; score: number; dist: number; dust: number; }
+export interface BoardRow { pseudo: string; wallet: string; score: number; dist: number; dust: number; bigBangs: number; }
 export interface LocalBest { v: 1; score: number; dist: number; dust: number; }
 
 const LOG = "[Supabase]";
@@ -137,7 +137,7 @@ export class Leaderboard {
     const start = periodStart ?? periodStartUTC(period);
     const { data, error } = await this.client
       .from("sn_leaderboard")
-      .select("wallet,best_score,best_dist,best_dust")
+      .select("wallet,best_score,best_dist,best_dust,big_bangs")
       .eq("period_type", period)
       .eq("period_start", start)
       .order("best_score", { ascending: false })
@@ -154,11 +154,13 @@ export class Leaderboard {
       score: x.best_score,
       dist: x.best_dist,
       dust: x.best_dust,
+      bigBangs: x.big_bangs ?? 0,
     }));
   }
 
-  /** Signed submission through the Edge Function. Returns true if stored. */
-  async submit(score: number, dist: number, dust: number): Promise<boolean> {
+  /** Signed submission through the Edge Function. Returns true if stored.
+      `bigBangs` is unsigned transparency metadata (not part of the message). */
+  async submit(score: number, dist: number, dust: number, bigBangs = 0): Promise<boolean> {
     if (!this.client) { console.warn(`${LOG} submit skipped — leaderboard not configured.`); return false; }
     const address = this.wallet.getAddress();
     if (!address) { console.warn(`${LOG} submit skipped — no wallet connected (guests can't rank).`); return false; }
@@ -174,7 +176,7 @@ export class Leaderboard {
     }
 
     const { data, error } = await this.client.functions.invoke("submit-score", {
-      body: { wallet: address, score, dist, dust, ts, signature },
+      body: { wallet: address, score, dist, dust, ts, signature, bigbangs: bigBangs },
     });
     if (error) {
       this.lastError = error.message;
@@ -219,9 +221,9 @@ export class Leaderboard {
   private static PENDING_KEY = "super-novus:pending";
 
   /** Store a score to submit later (played offline / no wallet). */
-  savePending(score: number, dist: number, dust: number): void {
+  savePending(score: number, dist: number, dust: number, bigBangs = 0): void {
     try {
-      localStorage.setItem(Leaderboard.PENDING_KEY, JSON.stringify({ score, dist, dust }));
+      localStorage.setItem(Leaderboard.PENDING_KEY, JSON.stringify({ score, dist, dust, bigBangs }));
       console.info(`${LOG} score stored locally — will sync when a wallet connects.`);
     } catch { /* private mode */ }
   }
@@ -231,14 +233,14 @@ export class Leaderboard {
   /** Submit any stored pending score once a wallet is connected. */
   async syncPending(): Promise<boolean> {
     if (!this.client || !this.wallet.getAddress()) return false;
-    let p: { score: number; dist: number; dust: number } | null = null;
+    let p: { score: number; dist: number; dust: number; bigBangs?: number } | null = null;
     try {
       const raw = localStorage.getItem(Leaderboard.PENDING_KEY);
       if (raw) p = JSON.parse(raw);
     } catch { /* ignore */ }
     if (!p) return false;
     console.info(`${LOG} syncing pending score…`, p);
-    const ok = await this.submit(p.score, p.dist, p.dust);
+    const ok = await this.submit(p.score, p.dist, p.dust, p.bigBangs ?? 0);
     if (ok) { try { localStorage.removeItem(Leaderboard.PENDING_KEY); } catch { /* ignore */ } }
     return ok;
   }
