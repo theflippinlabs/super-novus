@@ -459,19 +459,19 @@ export class GameEngine {
     this.ui.setEnergy(0); this._setNovaReady(false);
 
     const p = this.player.pos.clone();
-    this.ui.flashNova(); // white-gold full-screen flash ~400ms
+    this.ui.flashNova(); // blue-white full-screen flash ~400ms
     this.ui.floatScore("NOVA", "nova");
 
-    // Shockwave ring — additive torus, scale 1 → ~90.
+    // Shockwave ring — additive torus, scale 1 → ~90 (blue-white supernova).
     const ring = new THREE.Mesh(new THREE.TorusGeometry(1, 0.5, 12, 64),
-      new THREE.MeshBasicMaterial({color:0xFFE9B0, transparent:true, opacity:1, blending:THREE.AdditiveBlending, depthWrite:false}));
+      new THREE.MeshBasicMaterial({color:0xCFE6FF, transparent:true, opacity:1, blending:THREE.AdditiveBlending, depthWrite:false}));
     ring.position.copy(p);
     this.scene.add(ring);
     this._novaRing = {mesh:ring, t:0};
 
     // Expansion sphere — additive, grows to the blast radius.
     const sph = new THREE.Mesh(new THREE.SphereGeometry(1, 28, 20),
-      new THREE.MeshBasicMaterial({color:0xFFCF80, transparent:true, opacity:0.5, blending:THREE.AdditiveBlending, depthWrite:false}));
+      new THREE.MeshBasicMaterial({color:0x8fbcff, transparent:true, opacity:0.5, blending:THREE.AdditiveBlending, depthWrite:false}));
     sph.position.copy(p);
     this.scene.add(sph);
     this._novaSphere = {mesh:sph, t:0};
