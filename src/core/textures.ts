@@ -71,9 +71,10 @@ const TEX: Record<string, any> = {
     }
   }),
   rock: canvasTex(128, 128, (ctx, w, h) => {
-    ctx.fillStyle = "#4a3a2c"; ctx.fillRect(0,0,w,h);
+    // Cool blue-grey space rock (was warm brown) — reads premium under the blue star.
+    ctx.fillStyle = "#3b404e"; ctx.fillRect(0,0,w,h);
     for (let i = 0; i < 2600; i++){
-      ctx.fillStyle = `hsla(${rand(18,36)}, ${rand(22,45)}%, ${rand(8,42)}%, ${rand(.25,.65)})`;
+      ctx.fillStyle = `hsla(${rand(212,242)}, ${rand(8,20)}%, ${rand(9,44)}%, ${rand(.25,.65)})`;
       ctx.fillRect(Math.random()*w, Math.random()*h, rand(1,5), rand(1,3));
     }
     for (let i = 0; i < 14; i++){
@@ -81,7 +82,7 @@ const TEX: Record<string, any> = {
       const g = ctx.createRadialGradient(x,y,0,x,y,r);
       g.addColorStop(0, "rgba(0,0,0,.55)");
       g.addColorStop(.7, "rgba(0,0,0,.2)");
-      g.addColorStop(1, "rgba(130,95,60,.28)");
+      g.addColorStop(1, "rgba(110,125,160,.26)");
       ctx.fillStyle = g;
       ctx.beginPath(); ctx.arc(x,y,r,0,7); ctx.fill();
     }
