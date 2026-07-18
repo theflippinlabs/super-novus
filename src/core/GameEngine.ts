@@ -369,9 +369,13 @@ export class GameEngine {
       b.addEventListener("click", () => { const m = b.dataset.mode; if (m) this._setControlMode(m as ControlMode); });
     this.ui.setControlActive(this.controlMode);
 
-    // Profile — open the dashboard from either the button or the identity chip.
-    this.ui.profileBtn.addEventListener("click", () => this._openProfile());
-    this.ui.profileChip.addEventListener("click", () => this._openProfile());
+    // Profile — open the dashboard from the circular header icon.
+    this.ui.profileIcon.addEventListener("click", () => this._openProfile());
+    // Menu header music toggle (mirrors the in-game HUD button).
+    this.ui.menuMusicBtn.addEventListener("click", () => {
+      const on = this.music.toggle();
+      this.ui.setMusicButton(on);
+    });
   }
 
   start(){
@@ -699,6 +703,7 @@ export class GameEngine {
   _returnToMenu(){
     if (this._deathRing){ this.scene.remove(this._deathRing.mesh); this._deathRing = null; }
     this.joystick.unmount();
+    this.ui.musicBtn.style.display = "none";   // menu uses the header music button
     this.ui.gameover.style.display = "none";
     this.ui.menu.style.display = "flex";
     this._refreshBoards();

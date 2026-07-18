@@ -48,10 +48,8 @@ export class UIManager {
   newRecordBadge = $("newRecordBadge");
   weeklyRank = $("weeklyRank");
   monthlyRank = $("monthlyRank");
-  profileBtn = $("profileBtn") as HTMLButtonElement;
-  profileChip = $("profileChip");
-  chipAvatar = $("chipAvatar") as HTMLImageElement;
-  chipName = $("chipName");
+  profileIcon = $("profileIcon") as HTMLButtonElement;
+  menuMusicBtn = $("menuMusicBtn") as HTMLButtonElement;
   private _tt: ReturnType<typeof setTimeout> | undefined;
 
   /** Active locale as a BCP-47 tag for number/date formatting. */
@@ -69,17 +67,15 @@ export class UIManager {
       b.classList.toggle("active", b.dataset.mode === mode);
   }
 
-  /** Show the avatar + nickname chip when connected; the Profile button otherwise.
-      The wallet address is never shown here (home screen). */
-  setProfileIdentity(connected: boolean, avatar: string | null, nickname: string | null): void {
-    if (connected) {
-      this.profileBtn.style.display = "none";
-      this.profileChip.style.display = "flex";
-      if (avatar) this.chipAvatar.src = avatar;
-      this.chipName.textContent = nickname || "…";
+  /** Fill the circular header profile icon with the avatar when connected, or a
+      neutral silhouette otherwise. The nickname/address live only in the panel. */
+  setProfileIdentity(connected: boolean, avatar: string | null, _nickname: string | null): void {
+    if (connected && avatar) {
+      this.profileIcon.style.backgroundImage = `url("${avatar}")`;
+      this.profileIcon.classList.add("hasAvatar");
     } else {
-      this.profileChip.style.display = "none";
-      this.profileBtn.style.display = "";
+      this.profileIcon.style.backgroundImage = "";
+      this.profileIcon.classList.remove("hasAvatar");
     }
   }
 
@@ -118,11 +114,13 @@ export class UIManager {
     this.energyWrap.classList.toggle("full", ready);
   }
 
-  /** Reflect music ON/OFF on the HUD toggle. */
+  /** Reflect music ON/OFF on both the in-game HUD toggle and the menu header. */
   setMusicButton(on: boolean): void {
-    this.musicBtn.textContent = on ? "🎵" : "🔇";
-    this.musicBtn.classList.toggle("off", !on);
-    this.musicBtn.setAttribute("aria-label", on ? "Couper la musique" : "Activer la musique");
+    for (const b of [this.musicBtn, this.menuMusicBtn]) {
+      b.textContent = on ? "🎵" : "🔇";
+      b.classList.toggle("off", !on);
+      b.setAttribute("aria-label", on ? "Couper la musique" : "Activer la musique");
+    }
   }
 
   /** White-gold full-screen flash for Nova Blast (~400ms). */

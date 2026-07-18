@@ -58,7 +58,7 @@
     pointer-events:auto;font-family:inherit;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
   #musicBtn{position:fixed;top:calc(8px + env(safe-area-inset-top));left:12px;width:40px;height:40px;
     background:rgba(10,12,32,.4);border:1px solid rgba(255,255,255,.16);border-radius:11px;
-    color:#fff;font-size:15px;line-height:1;display:flex;align-items:center;justify-content:center;z-index:11;
+    color:#fff;font-size:15px;line-height:1;display:none;align-items:center;justify-content:center;z-index:11;
     pointer-events:auto;font-family:inherit;cursor:pointer;backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
   #musicBtn.off{opacity:.5}
   #levelToast{position:fixed;top:26%;left:50%;transform:translateX(-50%);font-size:13px;font-weight:800;
@@ -66,25 +66,41 @@
 
   /* ===== Écrans ===== */
   .screen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;
-    background:radial-gradient(ellipse at 50% -20%, rgba(60,40,110,.32), rgba(3,3,18,.94) 62%);
-    z-index:10;text-align:center;padding:20px;overflow-y:auto}
-  .brand{font-size:10px;letter-spacing:9px;color:var(--dim);margin-bottom:12px;font-weight:600}
-  h1{font-size:clamp(42px,11vw,88px);font-weight:900;letter-spacing:.02em;font-style:italic;
-    background:linear-gradient(180deg,#fff 5%,#cfe0ff 30%,#6d9bea 58%,#2a4780 92%);
+    background:
+      radial-gradient(120% 82% at 50% -12%, rgba(104,80,200,.30), transparent 58%),
+      radial-gradient(80% 55% at 84% 12%, rgba(56,120,224,.15), transparent 55%),
+      radial-gradient(90% 60% at 50% 118%, rgba(120,66,200,.14), transparent 60%),
+      linear-gradient(180deg,#070619 0%,#050416 55%,#030310 100%);
+    z-index:10;text-align:center;padding:22px;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  /* Menu starts clearly below the header, respects the safe area, roomy sections */
+  #menu{justify-content:flex-start;
+    padding-top:calc(env(safe-area-inset-top) + 84px);
+    padding-bottom:calc(env(safe-area-inset-bottom) + 34px)}
+  #menu > *{flex-shrink:0}
+  .brand{font-size:11px;letter-spacing:11px;text-indent:11px;color:#9aa6d4;margin-bottom:14px;font-weight:600;opacity:.9}
+  h1{font-size:clamp(44px,12vw,84px);font-weight:800;letter-spacing:.1em;line-height:1.02;
+    background:linear-gradient(180deg,#ffffff 2%,#d4e8ff 28%,#7db2ff 60%,#2f6fd6 100%);
     -webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;
-    filter:drop-shadow(0 4px 0 rgba(8,16,44,.95)) drop-shadow(0 0 34px rgba(255,150,50,.55));
-    transform:skewX(-5deg);margin-bottom:2px}
-  .sunline{width:min(64vw,320px);height:3px;margin:4px 0 20px;
-    background:radial-gradient(circle,#FFF0C0,rgba(255,122,47,.75) 40%,transparent 75%);
-    box-shadow:0 0 22px rgba(255,150,60,.9)}
-  .sub{font-size:11px;letter-spacing:5px;color:var(--dim);margin-bottom:20px;font-weight:600}
-  .rules{font-size:12px;line-height:1.9;color:#c8cfe8;margin-bottom:22px;max-width:340px}
-  .rules b{color:var(--gold)}
-  button.big{pointer-events:auto;font-family:inherit;font-size:15px;letter-spacing:5px;padding:16px 46px;
-    color:#050418;background:linear-gradient(180deg,#FFEDB0,var(--gold) 60%,#D89B1E);border:none;border-radius:14px;
-    cursor:pointer;font-weight:800;box-shadow:0 0 32px rgba(245,197,66,.55), 0 4px 0 rgba(120,80,10,.6);
-    transition:transform .12s}
-  button.big:active{transform:scale(.94) translateY(2px)}
+    filter:drop-shadow(0 0 22px rgba(96,158,255,.5)) drop-shadow(0 2px 0 rgba(8,14,40,.85));
+    margin-bottom:6px}
+  .sunline{position:relative;width:min(56vw,280px);height:2px;margin:16px 0 30px;
+    background:linear-gradient(90deg,transparent,rgba(110,170,255,.5) 22%,#c6e2ff 50%,rgba(110,170,255,.5) 78%,transparent);
+    box-shadow:0 0 14px rgba(110,170,255,.6)}
+  .sunline::before{content:"";position:absolute;left:50%;top:50%;width:9px;height:9px;
+    transform:translate(-50%,-50%) rotate(45deg);background:#eaf4ff;border-radius:1px;
+    box-shadow:0 0 12px 2px rgba(150,200,255,.9)}
+  .sub{font-size:11px;letter-spacing:6px;color:#8f9ac4;margin-bottom:30px;font-weight:600}
+  .rules{font-size:12.5px;line-height:2;color:#c4cbe8;margin-bottom:30px;max-width:330px;opacity:.94}
+  .rules b{color:#cbb6ff;font-weight:700}
+  button.big{position:relative;pointer-events:auto;font-family:inherit;font-size:15px;letter-spacing:3.5px;
+    text-transform:uppercase;padding:18px 46px;color:#3a2600;border:none;border-radius:16px;cursor:pointer;font-weight:800;
+    background:linear-gradient(180deg,#FFF6D6 0%,#FBD974 40%,#F0B429 78%,#D48E12 100%);
+    box-shadow:0 12px 28px rgba(240,180,40,.4), 0 2px 0 rgba(255,255,255,.55) inset, 0 -3px 9px rgba(150,90,0,.32) inset, 0 6px 0 #9c6a12;
+    transition:transform .13s cubic-bezier(.2,.8,.2,1), box-shadow .13s;overflow:hidden}
+  button.big::after{content:"";position:absolute;left:2px;right:2px;top:2px;height:46%;border-radius:14px 14px 42% 42%;
+    background:linear-gradient(180deg,rgba(255,255,255,.6),transparent);pointer-events:none}
+  button.big:hover{transform:translateY(-1px);box-shadow:0 16px 34px rgba(240,180,40,.48), 0 2px 0 rgba(255,255,255,.6) inset, 0 -3px 9px rgba(150,90,0,.32) inset, 0 7px 0 #9c6a12}
+  button.big:active{transform:translateY(4px);box-shadow:0 5px 14px rgba(240,180,40,.4), 0 2px 0 rgba(255,255,255,.5) inset, 0 2px 0 #9c6a12}
   #gameover,#pauseScreen{display:none}
   #gameover h1{background:linear-gradient(180deg,#FFE3CE,#FF7A2F 55%,#8E3208);
     -webkit-background-clip:text;background-clip:text}
@@ -108,16 +124,21 @@
   @media (prefers-reduced-motion: reduce){.pulse{animation:none}}
 
   /* ===== Auth + Leaderboard ===== */
-  #authBox{margin:4px 0 20px;display:flex;flex-direction:column;align-items:center;gap:11px;min-height:60px}
+  #authBox{margin:6px 0 28px;display:flex;flex-direction:column;align-items:center;gap:14px;min-height:60px}
   #authRow{display:flex;gap:8px;align-items:center}
   #pseudoInput{pointer-events:auto;touch-action:auto;font-family:inherit;font-size:13px;letter-spacing:2px;
     padding:11px 14px;width:170px;text-align:center;color:#fff;font-weight:700;
     background:rgba(10,14,36,.7);border:1px solid rgba(140,170,255,.35);border-radius:10px;outline:none;text-transform:uppercase}
   #pseudoInput::placeholder{color:#5a6288;font-weight:600}
-  button.mini{pointer-events:auto;font-family:inherit;font-size:11px;letter-spacing:2px;padding:11px 16px;
-    color:#dfe6ff;background:rgba(30,40,80,.7);border:1px solid rgba(140,170,255,.4);border-radius:10px;
-    cursor:pointer;font-weight:700}
-  button.mini:active{transform:scale(.95)}
+  button.mini{position:relative;pointer-events:auto;font-family:inherit;font-size:12px;letter-spacing:1.5px;padding:13px 22px;
+    color:#e7ecff;font-weight:700;border-radius:13px;cursor:pointer;
+    background:linear-gradient(180deg,rgba(66,80,150,.55),rgba(30,40,92,.6));
+    border:1px solid rgba(150,170,255,.34);
+    box-shadow:0 8px 20px rgba(10,14,40,.5), 0 1px 0 rgba(255,255,255,.12) inset;
+    -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);
+    transition:transform .12s,border-color .2s,box-shadow .2s}
+  button.mini:hover{border-color:rgba(176,158,255,.62);box-shadow:0 10px 24px rgba(44,32,96,.55), 0 1px 0 rgba(255,255,255,.16) inset}
+  button.mini:active{transform:scale(.96)}
   #loggedRow{display:none;flex-direction:row;gap:10px;align-items:center}
   #loggedRow .who{font-size:12px;letter-spacing:2px;color:#bfe0a8;font-weight:700}
   .authNote{font-size:9.5px;letter-spacing:1px;color:#5a6288}
@@ -150,20 +171,27 @@
   .lbPrize{font-size:10px;letter-spacing:1.5px;color:var(--gold);font-weight:700;margin:0 0 8px;text-align:center;line-height:1.55}
   .lbPrize span{color:#c8cfe8;font-weight:600}
 
-  /* ===== Menu top bar: language + profile ===== */
-  #menuTop{position:absolute;top:calc(10px + env(safe-area-inset-top));left:12px;right:12px;
-    display:flex;justify-content:flex-end;align-items:center;gap:8px;z-index:12}
-  .langSel{display:flex;gap:3px;background:rgba(10,14,36,.5);border:1px solid rgba(140,170,255,.2);
-    border-radius:10px;padding:3px}
-  .langBtn{pointer-events:auto;font-family:inherit;font-size:10px;font-weight:700;letter-spacing:.4px;
-    color:var(--dim);background:none;border:none;border-radius:7px;padding:6px 6px;cursor:pointer}
-  .langBtn.active{color:#050418;background:linear-gradient(180deg,#FFEDB0,var(--gold) 60%,#D89B1E)}
-  .pfChip{display:none;align-items:center;gap:8px;pointer-events:auto;cursor:pointer;
-    background:rgba(10,14,36,.5);border:1px solid rgba(140,170,255,.25);border-radius:30px;padding:4px 12px 4px 4px}
-  .chipAvatar{width:30px;height:30px;border-radius:50%;object-fit:cover;background:#0a0e24;border:1px solid rgba(245,197,66,.4)}
-  .chipName{font-size:12px;font-weight:800;letter-spacing:.5px;max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  #profileBtn{pointer-events:auto;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:1px;
-    color:#dfe6ff;background:rgba(30,40,80,.6);border:1px solid rgba(140,170,255,.3);border-radius:30px;padding:8px 13px;cursor:pointer}
+  /* ===== Menu header: music · profile · language ===== */
+  #menuTop{position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) + 62px);
+    display:flex;justify-content:flex-end;align-items:center;gap:9px;z-index:14;pointer-events:none;
+    padding:env(safe-area-inset-top) 16px 0;
+    background:linear-gradient(180deg,rgba(6,6,22,.72),rgba(6,6,22,.18) 65%,transparent)}
+  #menuTop > *{pointer-events:auto}
+  .hIcon{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;
+    font-size:17px;line-height:1;color:#eaf0ff;cursor:pointer;font-family:inherit;flex-shrink:0;
+    background:radial-gradient(circle at 40% 34%,rgba(74,90,168,.6),rgba(20,26,58,.62));background-size:cover;background-position:center;
+    border:1px solid rgba(150,170,255,.3);box-shadow:0 5px 15px rgba(8,10,30,.5),0 1px 0 rgba(255,255,255,.1) inset;
+    -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);transition:transform .12s,border-color .2s,box-shadow .2s}
+  .hIcon:active{transform:scale(.9)}
+  .hIcon.off{opacity:.5}
+  #profileIcon{background-repeat:no-repeat;background-position:center;background-size:64%;
+    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='8.6' r='4' fill='%23aeb9e6'/><path d='M4.5 20.5c0-3.7 3.4-6.2 7.5-6.2s7.5 2.5 7.5 6.2z' fill='%23aeb9e6'/></svg>")}
+  #profileIcon.hasAvatar{background-size:cover;border-color:rgba(245,197,66,.6);box-shadow:0 5px 15px rgba(8,10,30,.5),0 0 0 2px rgba(245,197,66,.25)}
+  .langSel{display:flex;gap:2px;background:rgba(12,16,40,.55);border:1px solid rgba(150,170,255,.26);
+    border-radius:14px;padding:3px;-webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);box-shadow:0 5px 15px rgba(8,10,30,.5)}
+  .langBtn{pointer-events:auto;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:.2px;
+    color:#9aa6d4;background:none;border:none;border-radius:11px;padding:7px 7px;cursor:pointer;transition:color .2s,background .2s}
+  .langBtn.active{color:#241a00;background:linear-gradient(180deg,#FFE9A8,#F0B429)}
 
   /* ===== Controls setting ===== */
   .setPanel{width:min(84vw,320px);margin:2px 0 12px}
@@ -211,11 +239,8 @@
 
 <div class="screen" id="menu">
   <div id="menuTop">
-    <button id="profileBtn" data-i18n="profile.open">Profil</button>
-    <div class="pfChip" id="profileChip">
-      <img class="chipAvatar" id="chipAvatar" alt="avatar">
-      <span class="chipName" id="chipName"></span>
-    </div>
+    <button id="menuMusicBtn" class="hIcon" aria-label="Musique">🎵</button>
+    <button id="profileIcon" class="hIcon" data-i18n-aria="profile.open" aria-label="Profil"></button>
     <div class="langSel" id="langSel">
       <button class="langBtn" data-lang="fr">🇫🇷 FR</button>
       <button class="langBtn" data-lang="en">🇬🇧 EN</button>
