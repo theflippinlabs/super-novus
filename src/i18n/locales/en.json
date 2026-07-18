@@ -11,8 +11,8 @@
   "menu.connectWallet": "🔗 CONNECT WALLET",
   "menu.logout": "LOG OUT",
   "menu.leaderboard": "GALACTIC LEADERBOARD",
-  "menu.tabWeekly": "WEEK",
-  "menu.tabMonthly": "MONTH",
+  "menu.tabWeekly": "WEEKLY COMPETITION",
+  "menu.tabMonthly": "MONTHLY COMPETITION",
 
   "hud.score": "SCORE",
   "hud.distance": "DISTANCE",
@@ -74,6 +74,15 @@
 
   "lb.empty": "No scores this period — be the first!",
   "lb.soon": "Online leaderboard coming soon",
+  "lb.title": "GALACTIC LEADERBOARD",
+  "lb.viewFull": "VIEW FULL LEADERBOARD →",
+  "lb.searchPlaceholder": "Search a player…",
+  "lb.colPlayer": "PLAYER",
+  "lb.colScore": "SCORE",
+  "lb.colDist": "DIST",
+  "lb.colDust": "DUST",
+  "lb.you": "YOU",
+  "lb.noMatch": "No player found",
 
   "profile.title": "PROFILE",
   "profile.open": "Profile",

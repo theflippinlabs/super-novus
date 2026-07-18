@@ -1,11 +1,14 @@
 /* UIManager — ported from reference, auth section adapted to wallet/guest.
    HUD/stats/toast/flash logic identical to the validated build. */
-import { shortAddr } from "../net/WalletManager";
 import type { BoardRow } from "../net/Leaderboard";
 import type { PoolInfo } from "../net/PrizePool";
 import { SUPPORTED_CHAIN_ID, type ControlMode, type Lang } from "../config";
 import { i18n, t } from "../i18n";
 import { generateAvatar } from "./Avatar";
+import { displayName, silhouetteDataUri } from "./Identity";
+
+/** Identity for the current player's own board row (their chosen name/avatar). */
+export interface MeIdentity { wallet: string; nickname: string | null; avatar: string | null; }
 
 const $ = (id: string): HTMLElement => {
   const el = document.getElementById(id);
@@ -41,7 +44,7 @@ export class UIManager {
   wNick = $("wNick");
   saveState = $("saveState");
   lbPrize = $("lbPrize");
-  lbListMenu = $("lbListMenu");
+  podium = $("podium");
   saveScoreBtn = $("saveScoreBtn") as HTMLButtonElement;
   bigBangBtn = $("bigBangBtn") as HTMLButtonElement;
   bigBangCount = $("bigBangCount");
@@ -68,15 +71,21 @@ export class UIManager {
       b.classList.toggle("active", b.dataset.mode === mode);
   }
 
-  /** Fill the circular header profile icon with the avatar when connected, or a
-      neutral silhouette otherwise. The nickname/address live only in the panel. */
-  setProfileIdentity(connected: boolean, avatar: string | null, _nickname: string | null): void {
-    if (connected && avatar) {
+  /** Fill the circular header profile button so it reads unmistakably as "my
+      profile". Connected → the player's avatar (custom, else the deterministic
+      galaxy avatar) inside a gold profile ring. Guest → a neutral user silhouette
+      in a soft ring, signalling "sign in / your profile". The nickname/address
+      never appear here — identity is avatar-only in the header. */
+  setProfileIdentity(connected: boolean, wallet: string | null, customAvatar: string | null, _nickname: string | null): void {
+    if (connected && wallet) {
+      const avatar = customAvatar || generateAvatar(wallet, 64);
       this.profileIcon.style.backgroundImage = `url("${avatar}")`;
       this.profileIcon.classList.add("hasAvatar");
+      this.profileIcon.classList.remove("guest");
     } else {
-      this.profileIcon.style.backgroundImage = "";
+      this.profileIcon.style.backgroundImage = `url("${silhouetteDataUri()}")`;
       this.profileIcon.classList.remove("hasAvatar");
+      this.profileIcon.classList.add("guest");
     }
   }
 
@@ -218,7 +227,7 @@ export class UIManager {
     const loc = this.locale();
     el.innerHTML = rows
       .map((r, i) => {
-        const name = r.nickname || r.pseudo;
+        const name = displayName(r.wallet, r.nickname);   // never an address
         const avatar = r.avatar || generateAvatar(r.wallet, 48);
         return `
       <div class="lbRow${r.wallet === meWallet ? " me" : ""}">
@@ -232,6 +241,47 @@ export class UIManager {
       </div>`;
       })
       .join("");
+  }
+
+  /** Render the top-3 as a premium 3D podium (🥇 centre, 🥈 left, 🥉 right).
+      Avatar + nickname (never an address), score, trophy on #1, idle animation.
+      `me` supplies the current player's own name/avatar so their podium cell uses
+      their chosen identity. Empty slots render as neutral pedestals. */
+  renderPodium(rows: BoardRow[], me: MeIdentity | null): void {
+    // No scores yet → an inviting empty state, not ghost placeholders.
+    if (!rows.length) {
+      this.podium.innerHTML = `<div class="podEmpty"><span class="podEmojiTrophy">🏆</span><span>${t("lb.empty")}</span></div>`;
+      return;
+    }
+    const loc = this.locale();
+    // Visual order left→right: 2nd, 1st, 3rd.
+    const slots: Array<{ row: BoardRow | undefined; place: 1 | 2 | 3 }> = [
+      { row: rows[1], place: 2 }, { row: rows[0], place: 1 }, { row: rows[2], place: 3 },
+    ];
+    const medal = (p: number) => (p === 1 ? "🥇" : p === 2 ? "🥈" : "🥉");
+    const cell = ({ row, place }: { row: BoardRow | undefined; place: 1 | 2 | 3 }): string => {
+      const filled = Boolean(row);
+      const mine = Boolean(row && me && row.wallet.toLowerCase() === me.wallet.toLowerCase());
+      const name = row ? (mine ? displayName(row.wallet, me!.nickname) : displayName(row.wallet, row.nickname)) : "—";
+      const avatar = row
+        ? ((mine && me!.avatar) || row.avatar || generateAvatar(row.wallet, 72))
+        : silhouetteDataUri("#3f4a72");
+      const score = row ? (Math.floor(row.score)).toLocaleString(loc) : "—";
+      return `
+      <div class="pod pod${place}${filled ? "" : " empty"}${mine ? " me" : ""}">
+        <div class="podTop">
+          ${place === 1 ? `<div class="podCrown">🏆</div>` : ""}
+          <div class="podAvatarWrap">
+            <img class="podAvatar" src="${avatar}" alt="" loading="lazy">
+            <span class="podMedal">${medal(place)}</span>
+          </div>
+          <div class="podName">${escHtml(name)}</div>
+          <div class="podScore">${score}</div>
+        </div>
+        <div class="podBase"><span class="podRank">${place}</span></div>
+      </div>`;
+    };
+    this.podium.innerHTML = slots.map(cell).join("");
   }
 
   /** Explicit, non-blocking message in a board (e.g. server not configured). */
