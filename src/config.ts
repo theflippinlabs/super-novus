@@ -70,7 +70,7 @@ export const CAMERA_FOLLOW_FACTOR = 13;    // exponential lerp rate
 export const CAMERA_SHAKE_HIT = 0.8;
 export const CAMERA_SHAKE_DEATH = 1.6;
 export const FOV_BASE = 84;
-export const FOV_SPEED_FACTOR = 0.15;
+export const FOV_SPEED_FACTOR = 0.17;   // a touch more FOV stretch at speed (feel only)
 export const FOV_NOVA_PUNCH = 10;
 export const FOV_NEAR_MISS = -6;
 
@@ -99,8 +99,8 @@ export const BIG_BANG_RECIPIENT = "0x277B7CAD86D0f56Ae547533934dceA365ac7D7Bf";
 // --- Prize payouts (owner-approved, sent from the treasury wallet) ---
 // Same treasury both receives Big Bang CRO and sends the weekly/monthly prizes.
 export const TREASURY_ADDRESS = BIG_BANG_RECIPIENT;
-// Default CRO amount pre-filled in the admin payout panel (editable per payout;
-// e.g. the CRO equivalent of the $50 weekly prize). 0 = owner enters it.
+// Manual fallback CRO override for the admin payout panel. 0 = auto-compute from
+// the live CRO/USD price + the month's Big Bang revenue (see PrizePool).
 export const WEEKLY_PRIZE_CRO = 0;
 export const MONTHLY_PRIZE_CRO = 0;
 
@@ -129,15 +129,54 @@ export const SUPABASE_URL_DEFAULT = "https://xmjqrnlmcvrltjzuptao.supabase.co";
 export const SUPABASE_ANON_KEY_DEFAULT = "sb_publishable_4EM-qnipoN_8LZJhVHLv1A_Cigm8DlR";
 export const LEADERBOARD_PERIODS = ["weekly", "monthly"] as const;
 export type LeaderboardPeriod = (typeof LEADERBOARD_PERIODS)[number];
-export const WEEKLY_PRIZE_USD = 50;   // displayed only; no prize distribution logic
+
+// --- Prize pool (USD-pegged, paid in CRO at the live market price) ---
+// Weekly  : #1 wins the CRO equivalent of $WEEKLY_PRIZE_USD  (resets Monday 00:00 UTC).
+// Monthly : #1 wins the CRO equivalent of $MONTHLY_PRIZE_USD PLUS 30% of all CRO
+//           collected from Big Bang purchases that month (the Community Bonus).
+export const WEEKLY_PRIZE_USD = 25;    // guaranteed weekly prize (USD, paid in CRO)
+export const MONTHLY_PRIZE_USD = 50;   // guaranteed monthly prize (USD, paid in CRO)
+export const MONTHLY_BONUS_PCT = 0.30; // + 30% of the month's Big Bang CRO revenue
+// Live CRO/USD price (CoinGecko public API, browser-CORS friendly). Used only to
+// display / pre-fill the CRO equivalent of the USD-pegged prizes — the USD amounts
+// are the guaranteed figures, the CRO equivalent is always approximate ("≈").
+export const CRO_PRICE_URL =
+  "https://api.coingecko.com/api/v3/simple/price?ids=crypto-com-chain&vs_currencies=usd";
+export const CRO_PRICE_TTL_MS = 5 * 60 * 1000;   // cache the live price for 5 minutes
+export const CRO_PRICE_CACHE_KEY = "super-novus:cro-usd";
 
 // --- Music ---
 export const MUSIC_SRC = "/music.mp3";
 export const MUSIC_VOLUME = 0.22;      // 22% (target of the 20–25% range)
 export const MUSIC_PREF_KEY = "super-novus:music";
 
+// --- Controls ---
+export const CONTROL_MODES = ["touch", "joystick"] as const;
+export type ControlMode = (typeof CONTROL_MODES)[number];
+export const CONTROL_MODE_KEY = "super-novus:controls";
+export const DEFAULT_CONTROL_MODE: ControlMode = "touch";
+// Virtual joystick (Mode 2 — additive; Direct Touch stays exactly as-is).
+export const JOYSTICK_DEAD_ZONE = 0.16;    // fraction of knob travel ignored (0..1)
+export const JOYSTICK_MAX_RADIUS = 56;     // px the knob can travel from center
+// Lateral field-units/s at full deflection. Tuned to feel close to a direct-touch
+// sweep — this only maps input, it never changes forward speed/collision/camera.
+export const JOYSTICK_SPEED_X = 52;
+export const JOYSTICK_SPEED_Y = 30;
+
+// --- Localization ---
+export const LANGUAGES = ["fr", "en", "ko"] as const;
+export type Lang = (typeof LANGUAGES)[number];
+export const LANG_KEY = "super-novus:lang";
+export const DEFAULT_LANG: Lang = "fr";
+
+// --- Player profile ---
+export const NICKNAME_MIN = 3;
+export const NICKNAME_MAX = 18;
+export const AVATAR_MAX_BYTES = 262144;    // 256 KB cap for an uploaded avatar (data URI)
+export const PROFILE_HISTORY_LIMIT = 12;   // latest runs shown in the profile
+
 // --- Rendering ---
 export const PIXEL_RATIO_CAP = 2;
-export const TONE_EXPOSURE = 1.15;
-export const TONE_EXPOSURE_NOVA = 1.6;
+export const TONE_EXPOSURE = 1.08;       // crisper, less bloom (was 1.15)
+export const TONE_EXPOSURE_NOVA = 1.42;  // Nova punch without blowing out (was 1.6)
 export const DRAW_CALL_BUDGET = 120;

@@ -9,7 +9,7 @@ import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { LOCAL_SAVE_KEY, SUPABASE_URL_DEFAULT, SUPABASE_ANON_KEY_DEFAULT, type LeaderboardPeriod } from "../config";
 import { WalletManager, shortAddr } from "./WalletManager";
 
-export interface BoardRow { pseudo: string; wallet: string; score: number; dist: number; dust: number; bigBangs: number; }
+export interface BoardRow { pseudo: string; wallet: string; score: number; dist: number; dust: number; bigBangs: number; nickname: string | null; avatar: string | null; }
 export interface LocalBest { v: 1; score: number; dist: number; dust: number; }
 
 const LOG = "[Supabase]";
@@ -148,6 +148,8 @@ export class Leaderboard {
       return [];
     }
     this.lastError = null;
+    // Nickname/avatar per row come from the (future) profiles table — null for
+    // now, so the board renders a generated avatar + short address. Frontend-only.
     return (data ?? []).map((x) => ({
       pseudo: shortAddr(x.wallet),
       wallet: x.wallet,
@@ -155,6 +157,8 @@ export class Leaderboard {
       dist: x.best_dist,
       dust: x.best_dust,
       bigBangs: x.big_bangs ?? 0,
+      nickname: null as string | null,
+      avatar: null as string | null,
     }));
   }
 
