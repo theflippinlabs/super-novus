@@ -1,4 +1,5 @@
 // SUPER NOVUS — record-payout Edge Function (Deno / Supabase)
+// redeploy: v3 — MUST deploy with verify_jwt=false (see supabase/config.toml).
 // Marks a prize payout as PAID. Only the treasury owner can call it: the caller
 // signs a message with the treasury wallet and the function verifies the
 // signature matches TREASURY_ADDRESS. No funds move here — the owner already
