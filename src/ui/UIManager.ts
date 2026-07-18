@@ -37,9 +37,8 @@ export class UIManager {
   playBtn = $("playBtn") as HTMLButtonElement;
   walletBtn = $("walletBtn") as HTMLButtonElement;
   walletState = $("walletState");
-  loggedRow = $("loggedRow");
-  whoTxt = $("whoTxt");
-  logoutBtn = $("logoutBtn") as HTMLButtonElement;
+  walletStatus = $("walletStatus");
+  wNick = $("wNick");
   saveState = $("saveState");
   lbPrize = $("lbPrize");
   lbListMenu = $("lbListMenu");
@@ -185,16 +184,15 @@ export class UIManager {
       The address is never shown here — the player is identified by nickname. */
   setAuth(addr: string | null, walletAvailable: boolean, chainId: number | null, nickname: string | null = null): void {
     if (addr) {
+      // Connected: show only Avatar (header) + Nickname. No address, no disconnect.
       this.walletBtn.style.display = "none";
-      this.loggedRow.style.display = "flex";
-      const net = chainId === SUPPORTED_CHAIN_ID ? "CRONOS" : chainId === null ? "…" : `#${chainId}`;
-      this.whoTxt.textContent = `${nickname ? nickname : "✓"} · ${net}`;
+      this.walletStatus.style.display = "flex";
+      this.wNick.textContent = nickname || "…";
       this.playBtn.textContent = t("menu.playConnected");
-      this.walletState.textContent = chainId !== null && chainId !== SUPPORTED_CHAIN_ID
-        ? t("wallet.otherNet") : t("wallet.rankedNote");
+      this.walletState.textContent = chainId !== null && chainId !== SUPPORTED_CHAIN_ID ? t("wallet.otherNet") : "";
       return;
     }
-    this.loggedRow.style.display = "none";
+    this.walletStatus.style.display = "none";
     this.playBtn.textContent = t("menu.playGuest");
     if (!walletAvailable) {
       this.walletBtn.style.display = "";

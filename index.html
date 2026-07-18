@@ -4,7 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>SUPER NOVUS — Novarys</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Ccircle cx='16' cy='16' r='9' fill='%23F5C542'/%3E%3Ccircle cx='16' cy='16' r='4' fill='%23FFF0C0'/%3E%3C/svg%3E">
+<link rel="icon" type="image/png" href="/appicon.png">
+<link rel="apple-touch-icon" href="/appicon-180.png">
 <meta name="theme-color" content="#030312">
 <meta name="description" content="SUPER NOVUS — a Novarys cosmic arcade experience.">
 <meta name="color-scheme" content="dark">
@@ -15,6 +16,9 @@
 <meta property="og:title" content="SUPER NOVUS">
 <meta property="og:description" content="Traverse la galaxie — Novarys cosmic arcade.">
 <meta property="og:type" content="website">
+<meta property="og:image" content="/appicon.png">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="/appicon.png">
 <style>
   :root{ --gold:#F5C542; --dim:#8b93b8; }
   *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -72,10 +76,10 @@
       radial-gradient(90% 60% at 50% 118%, rgba(120,66,200,.14), transparent 60%),
       linear-gradient(180deg,#070619 0%,#050416 55%,#030310 100%);
     z-index:10;text-align:center;padding:22px;overflow-y:auto;-webkit-overflow-scrolling:touch}
-  /* Menu starts clearly below the header, respects the safe area, roomy sections */
-  #menu{justify-content:flex-start;
-    padding-top:calc(env(safe-area-inset-top) + 84px);
-    padding-bottom:calc(env(safe-area-inset-bottom) + 34px)}
+  /* Single-screen menu: everything visible at once, no scroll, safe-area aware */
+  #menu{justify-content:center;overflow:hidden;padding:22px;
+    padding-top:calc(env(safe-area-inset-top) + 62px);
+    padding-bottom:calc(env(safe-area-inset-bottom) + 14px)}
   #menu > *{flex-shrink:0}
   .brand{font-size:11px;letter-spacing:11px;text-indent:11px;color:#9aa6d4;margin-bottom:14px;font-weight:600;opacity:.9}
   h1{font-size:clamp(44px,12vw,84px);font-weight:800;letter-spacing:.1em;line-height:1.02;
@@ -89,7 +93,7 @@
   .sunline::before{content:"";position:absolute;left:50%;top:50%;width:9px;height:9px;
     transform:translate(-50%,-50%) rotate(45deg);background:#eaf4ff;border-radius:1px;
     box-shadow:0 0 12px 2px rgba(150,200,255,.9)}
-  .sub{font-size:11px;letter-spacing:6px;color:#8f9ac4;margin-bottom:30px;font-weight:600}
+  .sub{font-size:10.5px;letter-spacing:6px;color:#8f9ac4;margin-bottom:18px;font-weight:600}
   .rules{font-size:12.5px;line-height:2;color:#c4cbe8;margin-bottom:30px;max-width:330px;opacity:.94}
   .rules b{color:#cbb6ff;font-weight:700}
   button.big{position:relative;pointer-events:auto;font-family:inherit;font-size:15px;letter-spacing:3.5px;
@@ -124,7 +128,7 @@
   @media (prefers-reduced-motion: reduce){.pulse{animation:none}}
 
   /* ===== Auth + Leaderboard ===== */
-  #authBox{margin:6px 0 28px;display:flex;flex-direction:column;align-items:center;gap:14px;min-height:60px}
+  #authBox{margin:2px 0 18px;display:flex;flex-direction:column;align-items:center;gap:11px}
   #authRow{display:flex;gap:8px;align-items:center}
   #pseudoInput{pointer-events:auto;touch-action:auto;font-family:inherit;font-size:13px;letter-spacing:2px;
     padding:11px 14px;width:170px;text-align:center;color:#fff;font-weight:700;
@@ -146,9 +150,11 @@
   #saveState.ok{color:#9fdc8a}
   #saveState.no{color:#8b93b8}
 
-  .lbPanel{width:min(84vw,320px);margin:4px 0 18px;background:rgba(8,12,30,.6);
-    border:1px solid rgba(140,170,255,.22);border-radius:14px;padding:12px 14px 10px}
+  .lbPanel{width:min(86vw,330px);margin:0;background:rgba(8,12,30,.55);
+    border:1px solid rgba(140,170,255,.2);border-radius:16px;padding:11px 13px 9px;
+    -webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px)}
   .lbPanel h3{font-size:10px;letter-spacing:3px;color:var(--dim);font-weight:700;margin-bottom:8px}
+  #lbListMenu{max-height:132px;overflow:hidden}
   .lbRow{display:flex;justify-content:space-between;align-items:baseline;padding:4px 2px;
     font-size:12.5px;font-variant-numeric:tabular-nums;border-bottom:1px solid rgba(255,255,255,.05)}
   .lbRow:last-child{border-bottom:none}
@@ -171,31 +177,47 @@
   .lbPrize{font-size:10px;letter-spacing:1.5px;color:var(--gold);font-weight:700;margin:0 0 8px;text-align:center;line-height:1.55}
   .lbPrize span{color:#c8cfe8;font-weight:600}
 
-  /* ===== Menu header: music · profile · language ===== */
-  #menuTop{position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) + 62px);
-    display:flex;justify-content:flex-end;align-items:center;gap:9px;z-index:14;pointer-events:none;
-    padding:env(safe-area-inset-top) 16px 0;
-    background:linear-gradient(180deg,rgba(6,6,22,.72),rgba(6,6,22,.18) 65%,transparent)}
+  /* ===== Menu header — one toolbar, three controls, identical design ===== */
+  #menuTop{position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) + 58px);
+    display:flex;justify-content:flex-end;align-items:center;gap:8px;z-index:14;pointer-events:none;
+    padding:env(safe-area-inset-top) 14px 0;
+    background:linear-gradient(180deg,rgba(6,6,22,.7),rgba(6,6,22,.14) 70%,transparent)}
   #menuTop > *{pointer-events:auto}
-  .hIcon{width:42px;height:42px;border-radius:50%;display:flex;align-items:center;justify-content:center;
-    font-size:17px;line-height:1;color:#eaf0ff;cursor:pointer;font-family:inherit;flex-shrink:0;
-    background:radial-gradient(circle at 40% 34%,rgba(74,90,168,.6),rgba(20,26,58,.62));background-size:cover;background-position:center;
-    border:1px solid rgba(150,170,255,.3);box-shadow:0 5px 15px rgba(8,10,30,.5),0 1px 0 rgba(255,255,255,.1) inset;
-    -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);transition:transform .12s,border-color .2s,box-shadow .2s}
-  .hIcon:active{transform:scale(.9)}
+  /* shared shell: same height, radius, border, glow, shadow, backdrop for all 3 */
+  .hCtl{height:42px;border-radius:21px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+    border:1px solid rgba(150,170,255,.28);background:rgba(14,18,44,.55);
+    -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
+    box-shadow:0 5px 16px rgba(8,10,30,.5), 0 0 14px rgba(120,150,255,.13), inset 0 1px 0 rgba(255,255,255,.08);
+    transition:transform .12s,border-color .2s,box-shadow .2s}
+  .hIcon{width:42px;font-size:17px;line-height:1;color:#eaf0ff;cursor:pointer;font-family:inherit;
+    background-size:cover;background-position:center;background-repeat:no-repeat}
+  .hIcon:active{transform:scale(.92)}
   .hIcon.off{opacity:.5}
-  #profileIcon{background-repeat:no-repeat;background-position:center;background-size:64%;
-    background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='8.6' r='4' fill='%23aeb9e6'/><path d='M4.5 20.5c0-3.7 3.4-6.2 7.5-6.2s7.5 2.5 7.5 6.2z' fill='%23aeb9e6'/></svg>")}
-  #profileIcon.hasAvatar{background-size:cover;border-color:rgba(245,197,66,.6);box-shadow:0 5px 15px rgba(8,10,30,.5),0 0 0 2px rgba(245,197,66,.25)}
-  .langSel{display:flex;gap:2px;background:rgba(12,16,40,.55);border:1px solid rgba(150,170,255,.26);
-    border-radius:14px;padding:3px;-webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);box-shadow:0 5px 15px rgba(8,10,30,.5)}
+  /* Default profile avatar = the official Super Novus icon until one is uploaded */
+  #profileIcon{background-image:url("/appicon.png")}
+  #profileIcon.hasAvatar{border-color:rgba(245,197,66,.6)}
+  .langSel{gap:2px;padding:0 4px}
   .langBtn{pointer-events:auto;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:.2px;
-    color:#9aa6d4;background:none;border:none;border-radius:11px;padding:7px 7px;cursor:pointer;transition:color .2s,background .2s}
+    color:#9aa6d4;background:none;border:none;border-radius:13px;padding:8px 6px;cursor:pointer;transition:color .2s,background .2s}
   .langBtn.active{color:#241a00;background:linear-gradient(180deg,#FFE9A8,#F0B429)}
 
+  /* ===== Official logo + connected wallet status ===== */
+  .logo{width:min(72vw,330px);height:auto;margin:0 0 8px;pointer-events:none;
+    filter:drop-shadow(0 0 18px rgba(90,150,255,.4))}
+  #walletStatus{display:none;align-items:center;gap:8px;pointer-events:auto;cursor:pointer;
+    font-size:14px;font-weight:800;letter-spacing:.4px;color:#eef2ff}
+  #walletStatus .wDot{width:9px;height:9px;border-radius:50%;background:#b98cff;
+    box-shadow:0 0 10px rgba(170,120,255,.9);flex-shrink:0}
+
+  /* ===== Boot splash (logo) ===== */
+  #splash{position:fixed;inset:0;z-index:50;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(ellipse at 50% 42%,#0a0a22,#03030f 72%);transition:opacity .5s ease}
+  #splash.hide{opacity:0;pointer-events:none}
+  #splash img{width:min(70vw,320px);filter:drop-shadow(0 0 26px rgba(90,150,255,.45))}
+
   /* ===== Controls setting ===== */
-  .setPanel{width:min(84vw,320px);margin:2px 0 12px}
-  .setTitle{font-size:10px;letter-spacing:3px;color:var(--dim);font-weight:700;margin-bottom:8px;text-align:center}
+  .setPanel{width:min(86vw,330px);margin:0 0 14px}
+  .setTitle{font-size:10px;letter-spacing:3px;color:var(--dim);font-weight:700;margin-bottom:7px;text-align:center}
   .ctrlOpts{display:flex;gap:8px}
   .ctrlOpt{flex:1;pointer-events:auto;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.4px;
     color:#c8cfe8;background:rgba(20,26,58,.5);border:1px solid rgba(140,170,255,.2);border-radius:10px;
@@ -226,6 +248,8 @@
 </head>
 <body>
 
+<div id="splash"><img src="/logo.png" alt="SUPER NOVUS"></div>
+
 <div id="vignette"></div>
 
 <div id="hud">
@@ -251,32 +275,22 @@
 
 <div class="screen" id="menu">
   <div id="menuTop">
-    <button id="menuMusicBtn" class="hIcon" aria-label="Musique">🎵</button>
-    <button id="profileIcon" class="hIcon" data-i18n-aria="profile.open" aria-label="Profil"></button>
-    <div class="langSel" id="langSel">
+    <button id="menuMusicBtn" class="hCtl hIcon" aria-label="Musique">🎵</button>
+    <button id="profileIcon" class="hCtl hIcon" data-i18n-aria="profile.open" aria-label="Profil"></button>
+    <div class="hCtl langSel" id="langSel">
       <button class="langBtn" data-lang="fr">🇫🇷 FR</button>
       <button class="langBtn" data-lang="en">🇬🇧 EN</button>
       <button class="langBtn" data-lang="ko">🇰🇷 KR</button>
     </div>
   </div>
 
-  <div class="brand">N O V A R Y S</div>
-  <h1>SUPER NOVUS</h1>
-  <div class="sunline"></div>
+  <img id="logo" class="logo" src="/logo.png" alt="SUPER NOVUS">
   <div class="sub pulse" data-i18n="menu.tagline">TRAVERSE LA GALAXIE</div>
-  <div class="rules" data-i18n-html="menu.rules">
-    Glisse ton doigt — l'étoile répond <b>instantanément</b>.<br>
-    Évite tout. Traverse la <b>poussière d'étoiles</b>.<br>
-    3 vies. La galaxie accélère toutes les 30 s.
-  </div>
 
   <div id="authBox">
     <button class="big" id="playBtn" data-i18n="menu.playGuest">CONTINUER EN INVITÉ</button>
     <button class="mini" id="walletBtn" data-i18n="menu.connectWallet">🔗 CONNECTER LE WALLET</button>
-    <div id="loggedRow">
-      <span class="who" id="whoTxt">CONNECTÉ</span>
-      <button class="mini" id="logoutBtn" data-i18n="menu.logout">DÉCONNEXION</button>
-    </div>
+    <div id="walletStatus"><span class="wDot"></span><span id="wNick"></span></div>
     <div class="authNote" id="walletState"></div>
   </div>
 
@@ -289,7 +303,6 @@
   </div>
 
   <div class="lbPanel">
-    <h3 data-i18n="menu.leaderboard">CLASSEMENT GALACTIQUE</h3>
     <div class="lbTabs">
       <button class="lbTab active" data-period="weekly" data-i18n="menu.tabWeekly">SEMAINE</button>
       <button class="lbTab" data-period="monthly" data-i18n="menu.tabMonthly">MOIS</button>

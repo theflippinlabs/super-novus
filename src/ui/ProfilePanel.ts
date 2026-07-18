@@ -8,8 +8,9 @@
 import { Profile, type ProfileRow, type ProfileStats } from "../net/Profile";
 import { Leaderboard } from "../net/Leaderboard";
 import { WalletManager } from "../net/WalletManager";
-import { generateAvatar } from "./Avatar";
 import { i18n, t } from "../i18n";
+
+const DEFAULT_AVATAR = "/appicon.png";   // official Super Novus icon until one is uploaded
 import { NICKNAME_MIN, NICKNAME_MAX } from "../config";
 
 const BCP47: Record<string, string> = { fr: "fr-FR", en: "en-US", ko: "ko-KR" };
@@ -38,8 +39,7 @@ export class ProfilePanel {
   private avatarSrc(row: ProfileRow | null): string {
     const addr = this.wallet.getAddress() || "0x0";
     if (row?.avatar_url) return row.avatar_url;
-    const cached = this.profile.cachedIdentity(addr).avatar;
-    return cached || generateAvatar(addr, 128);
+    return this.profile.cachedIdentity(addr).avatar || DEFAULT_AVATAR;
   }
   private nick(row: ProfileRow | null): string | null {
     const addr = this.wallet.getAddress() || "";
@@ -187,11 +187,19 @@ export class ProfilePanel {
 
     // Game history + reward history are intentionally out of scope for now
     // (frontend-first). They'll return with the Supabase-backed profile.
-    return `<div class="pfCard">${head}${configWarn}${meta}${ranks}${statsGrid}</div>`;
+    // Disconnect lives here — never on the home screen.
+    const disconnect = `<button id="pfDisconnect" class="pfBtn pfDanger">${t("menu.logout")}</button>`;
+    return `<div class="pfCard">${head}${configWarn}${meta}${ranks}${statsGrid}${disconnect}</div>`;
   }
 
   private bindShell(row?: ProfileRow | null): void {
     this.el.querySelector("#pfClose")?.addEventListener("click", () => this.close());
+    // Disconnect wallet (only available inside the profile).
+    this.el.querySelector("#pfDisconnect")?.addEventListener("click", async () => {
+      try { await this.wallet.disconnect(); } catch { /* ignore */ }
+      this.onIdentityChange?.();
+      this.close();
+    });
     // Edit nickname inline.
     this.el.querySelector("#pfEditNick")?.addEventListener("click", () => this.inlineNickname(row ?? null));
     // Avatar upload.
@@ -313,6 +321,8 @@ export class ProfilePanel {
         padding:11px 18px;font-weight:700;letter-spacing:1px;font-size:12px}
       .pfBtnGold{border:none;background:linear-gradient(180deg,#FFEDB0,var(--gold) 60%,#D89B1E);color:#050418;font-weight:800}
       .pfBtnSm{padding:8px 14px;font-size:11px}
+      .pfDanger{width:100%;margin-top:8px;color:#e5849a;border-color:rgba(224,112,138,.35);background:rgba(224,112,138,.08)}
+      .pfDanger:hover{border-color:rgba(224,112,138,.6)}
       @media (prefers-reduced-motion: reduce){.pfOverlay{backdrop-filter:none}}
     `;
     document.head.appendChild(s);
