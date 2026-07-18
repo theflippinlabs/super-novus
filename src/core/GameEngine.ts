@@ -133,8 +133,13 @@ export class GameEngine {
         this.audio.resumeContext(false);
         this.music.resume();           // resume music if it was on
         this.clock.getDelta();         // avoid a dt jump on return
+        // Returning from the wallet app (iOS Safari): re-check for a session.
+        this.wallet.resume();          // emits → identity + boards refresh if reconnected
       }
     });
+    // iOS Safari restores the page from bfcache with a pageshow event, not always
+    // visibilitychange — re-check the wallet session there too.
+    addEventListener("pageshow", () => { this.wallet.resume(); });
   }
 
   async _initAuth(){

@@ -77,17 +77,36 @@ export class WalletManager {
     if (this.projectId && this.hasStoredWcSession()) {
       try {
         const wc = await this.initWc();
-        if (wc.session && wc.accounts?.length) {
-          this.provider = wc;
-          this.address = wc.accounts[0];
-          this.chainId = Number(wc.chainId ?? this.chainId ?? SUPPORTED_CHAIN_ID);
-          this.watch(wc);
-          this.emit();
-          return this.address;
+        if (wc.session) {
+          // On a restored session accounts may not be populated yet — fall back
+          // to eth_accounts (no prompt) so the connected state survives reloads.
+          let accs = wc.accounts ?? [];
+          if (!accs.length) {
+            try { accs = (await wc.request({ method: "eth_accounts" })) as string[]; } catch { /* none */ }
+          }
+          if (accs?.length) {
+            this.provider = wc;
+            this.address = accs[0];
+            this.chainId = Number(wc.chainId ?? this.chainId ?? SUPPORTED_CHAIN_ID);
+            this.watch(wc);
+            this.emit();
+            return this.address;
+          }
         }
       } catch { /* stale/expired WC session */ }
     }
     return null;
+  }
+
+  /** Re-check for a restored session when the tab becomes visible again. iOS
+      Safari often suspends the page while the wallet app is open; on return the
+      WC session may already be established. Never opens a modal / prompt. */
+  async resume(): Promise<string | null> {
+    if (this.address) return this.address;            // already connected
+    const canInjected = Boolean(this.injected);
+    const canWc = Boolean(this.projectId) && this.hasStoredWcSession();
+    if (!canInjected && !canWc) return null;
+    try { return await this.tryReconnect(); } catch { return null; }
   }
 
   async connect(): Promise<string> {
@@ -100,14 +119,16 @@ export class WalletManager {
       this.address = accounts[0];
       await this.refreshChain();
       this.watch(inj);
-      await this.switchToCronos(inj); // best-effort, non-blocking
-      this.emit();
+      this.emit();                                    // show connected immediately
+      // Switch to Cronos in the background — never block the connected state on
+      // a chain-switch round-trip (which re-opens the wallet app on mobile).
+      void this.switchToCronos(inj).then(() => this.emit());
       return this.address;
     }
-    // 2) WalletConnect v2 (QR modal)
+    // 2) WalletConnect v2 (QR modal / mobile deep link)
     if (!this.projectId) throw new Error("VITE_WC_PROJECT_ID manquant");
     const wc = await this.initWc();
-    await wc.enable(); // opens the QR modal
+    await wc.enable(); // opens the QR modal / deep-links to the wallet app
     const accounts = (wc.accounts?.length ? wc.accounts
       : (await wc.request({ method: "eth_accounts" })) as string[]);
     if (!accounts?.length) throw new Error("Connexion refusée");
@@ -115,8 +136,8 @@ export class WalletManager {
     this.address = accounts[0];
     this.chainId = Number(wc.chainId ?? SUPPORTED_CHAIN_ID);
     this.watch(wc);
-    await this.switchToCronos(wc); // best-effort, non-blocking
-    this.emit();
+    this.emit();                                      // connected state now, no extra bounce
+    void this.switchToCronos(wc).then(() => this.emit());
     return this.address;
   }
 
@@ -191,7 +212,14 @@ export class WalletManager {
         this.chainId = typeof id === "string" ? parseInt(id, 16) : Number(id);
         this.emit();
       },
+      // WC v2 may (re)establish a session after a mobile deep-link round-trip.
+      connect: () => {
+        this.provider?.request({ method: "eth_accounts" })
+          .then((a) => { const arr = a as string[]; if (arr?.length) { this.address = arr[0]; this.emit(); } })
+          .catch(() => { /* ignore */ });
+      },
       disconnect: () => { this.clear(); this.emit(); },
+      session_delete: () => { this.clear(); this.emit(); },
     };
     for (const [ev, cb] of Object.entries(handlers)) p.on?.(ev, cb);
     this.bound = { p, handlers };
