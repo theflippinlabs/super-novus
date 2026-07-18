@@ -114,6 +114,7 @@ export class WalletManager {
     this.address = accounts[0];
     this.chainId = Number(wc.chainId ?? SUPPORTED_CHAIN_ID);
     this.watch(wc);
+    await this.switchToCronos(wc); // best-effort, non-blocking
     this.emit();
     return this.address;
   }
@@ -124,8 +125,12 @@ export class WalletManager {
     const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
     this.wc = (await EthereumProvider.init({
       projectId: this.projectId,
-      chains: [SUPPORTED_CHAIN_ID],
-      optionalChains: OPTIONAL_CHAIN_IDS as unknown as [number, ...number[]],
+      // Require only Ethereum mainnet (universally supported) so the
+      // connection itself never fails for wallets that don't have Cronos
+      // configured; Cronos is offered as an optional chain and we switch to
+      // it after connecting. Score signing works on any chain.
+      chains: [1],
+      optionalChains: [SUPPORTED_CHAIN_ID, 1, ...OPTIONAL_CHAIN_IDS] as unknown as [number, ...number[]],
       showQrModal: true,
       metadata: {
         name: "SUPER NOVUS",
