@@ -42,6 +42,7 @@ export class UIManager {
   saveState = $("saveState");
   lbPrize = $("lbPrize");
   lbListMenu = $("lbListMenu");
+  saveScoreBtn = $("saveScoreBtn") as HTMLButtonElement;
   bigBangBtn = $("bigBangBtn") as HTMLButtonElement;
   bigBangCount = $("bigBangCount");
   menuBtn = $("menuBtn") as HTMLButtonElement;
