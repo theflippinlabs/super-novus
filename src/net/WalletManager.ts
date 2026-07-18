@@ -233,9 +233,16 @@ export class WalletManager {
 
   async signMessage(msg: string): Promise<string> {
     if (!this.provider || !this.address) throw new Error("Wallet non connecté");
+    // personal_sign expects a HEX-encoded message. Passing a raw UTF-8 string is
+    // interpreted inconsistently across wallets and can produce a signature that
+    // recovers to the wrong address (server-side verification then fails). Encode
+    // to hex — the canonical form every library (ethers/viem) uses — so the wallet
+    // signs the exact EIP-191 digest the Edge Function reconstructs.
+    const hexMsg = "0x" + Array.from(new TextEncoder().encode(msg))
+      .map((b) => b.toString(16).padStart(2, "0")).join("");
     return (await this.provider.request({
       method: "personal_sign",
-      params: [msg, this.address],
+      params: [hexMsg, this.address],
     })) as string;
   }
 
