@@ -43,8 +43,6 @@ export class UIManager {
   walletStatus = $("walletStatus");
   wNick = $("wNick");
   saveState = $("saveState");
-  lbPrize = $("lbPrize");
-  podium = $("podium");
   saveScoreBtn = $("saveScoreBtn") as HTMLButtonElement;
   bigBangBtn = $("bigBangBtn") as HTMLButtonElement;
   bbLabel = $("bbLabel");
@@ -229,106 +227,4 @@ export class UIManager {
     this.walletState.textContent = t("wallet.error", { msg });
   }
 
-  renderBoard(el: HTMLElement, rows: BoardRow[], meWallet: string | null): void {
-    if (!rows.length) {
-      el.innerHTML = `<div class="lbEmpty">${t("lb.empty")}</div>`;
-      return;
-    }
-    const loc = this.locale();
-    el.innerHTML = rows
-      .map((r, i) => {
-        const name = displayName(r.wallet, r.nickname);   // never an address
-        const avatar = r.avatar || generateAvatar(r.wallet, 48);
-        return `
-      <div class="lbRow${r.wallet === meWallet ? " me" : ""}">
-        <span class="rank">${i + 1}</span>
-        <img class="lbAvatar" src="${avatar}" alt="" loading="lazy">
-        <span class="who">
-          <span class="name">${escHtml(name)}</span>
-          <span class="sub">${Math.floor(r.dist).toLocaleString(loc)} m · ★ ${Math.floor(r.dust)}${r.bigBangs ? ` · 🌌${r.bigBangs}` : ""}</span>
-        </span>
-        <span class="pts">${Math.floor(r.score).toLocaleString(loc)}</span>
-      </div>`;
-      })
-      .join("");
-  }
-
-  /** Render the top-3 as a premium 3D podium (🥇 centre, 🥈 left, 🥉 right).
-      Avatar + nickname (never an address), score, trophy on #1, idle animation.
-      `me` supplies the current player's own name/avatar so their podium cell uses
-      their chosen identity. Empty slots render as neutral pedestals. */
-  renderPodium(rows: BoardRow[], me: MeIdentity | null): void {
-    // No scores yet → an inviting empty state, not ghost placeholders.
-    if (!rows.length) {
-      this.podium.innerHTML = `<div class="podEmpty"><span class="podEmojiTrophy">🏆</span><span>${t("lb.empty")}</span></div>`;
-      return;
-    }
-    const loc = this.locale();
-    // Visual order left→right: 2nd, 1st, 3rd.
-    const slots: Array<{ row: BoardRow | undefined; place: 1 | 2 | 3 }> = [
-      { row: rows[1], place: 2 }, { row: rows[0], place: 1 }, { row: rows[2], place: 3 },
-    ];
-    const medal = (p: number) => (p === 1 ? "🥇" : p === 2 ? "🥈" : "🥉");
-    const cell = ({ row, place }: { row: BoardRow | undefined; place: 1 | 2 | 3 }): string => {
-      const filled = Boolean(row);
-      const mine = Boolean(row && me && row.wallet.toLowerCase() === me.wallet.toLowerCase());
-      const name = row ? (mine ? displayName(row.wallet, me!.nickname) : displayName(row.wallet, row.nickname)) : "—";
-      const avatar = row
-        ? ((mine && me!.avatar) || row.avatar || generateAvatar(row.wallet, 72))
-        : silhouetteDataUri("#3f4a72");
-      const score = row ? (Math.floor(row.score)).toLocaleString(loc) : "—";
-      return `
-      <div class="pod pod${place}${filled ? "" : " empty"}${mine ? " me" : ""}">
-        <div class="podTop">
-          ${place === 1 ? `<div class="podCrown">🏆</div>` : ""}
-          <div class="podAvatarWrap">
-            <img class="podAvatar" src="${avatar}" alt="" loading="lazy">
-            <span class="podMedal">${medal(place)}</span>
-          </div>
-          <div class="podName">${escHtml(name)}</div>
-          <div class="podScore">${score}</div>
-        </div>
-        <div class="podBase"><span class="podRank">${place}</span></div>
-      </div>`;
-    };
-    this.podium.innerHTML = slots.map(cell).join("");
-  }
-
-  /** Explicit, non-blocking message in a board (e.g. server not configured). */
-  boardMessage(el: HTMLElement, msg: string): void {
-    el.innerHTML = `<div class="lbEmpty">${msg}</div>`;
-  }
-
-  /** Render the live prize pool for the active tab. USD amounts are guaranteed;
-      CRO equivalents are shown as "≈" (they depend on the price at award time).
-      Monthly also shows the 30% Community Bonus from this month's Big Bangs. */
-  setPrizePool(period: "weekly" | "monthly", pool: PoolInfo | null): void {
-    const el = this.lbPrize;
-    if (!pool) { el.innerHTML = `🏆 <span>${t("prize.loading")}</span>`; return; }
-    const cro = (n: number) => n.toLocaleString(this.locale(), { maximumFractionDigits: n < 100 ? 2 : 0 });
-    if (period === "weekly") {
-      const eq = pool.weeklyCRO !== null ? ` (≈${cro(pool.weeklyCRO)} CRO)` : "";
-      el.innerHTML =
-        `🏆 <b>${t("prize.weeklyMain", { usd: pool.weeklyUsd })}</b> ` +
-        `<span>${t("prize.paidInCro")}${eq} — ${t("prize.weeklyComp")}</span>`;
-    } else {
-      const gEq = pool.monthlyGuaranteedCRO !== null ? ` (≈${cro(pool.monthlyGuaranteedCRO)} CRO)` : "";
-      const bonus = cro(pool.bonusCRO);
-      el.innerHTML =
-        `🏆 <b>${t("prize.monthlyTitle")}</b><br>` +
-        `<span>${t("prize.guaranteed", { usd: pool.monthlyUsd })}${gEq}</span><br>` +
-        `<span>${t("prize.bonus", { bonus })}</span><br>` +
-        `<b>${t("prize.total", { usd: pool.monthlyUsd, bonus })}</b>`;
-    }
-  }
-
-  /** Reflect the active weekly/monthly tab across both panels. */
-  setLbTab(period: string): void {
-    for (const btn of document.querySelectorAll<HTMLElement>(".lbTab"))
-      btn.classList.toggle("active", btn.dataset.period === period);
-  }
-
-  hideBoards(): void {
-    for (const el of document.querySelectorAll<HTMLElement>(".lbPanel")) el.style.display = "none";
-  }
 }
