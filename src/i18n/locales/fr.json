@@ -50,6 +50,13 @@
   "bigbang.paying": "Paiement en cours…",
   "bigbang.cancelled": "Paiement annulé",
   "bigbang.failed": "Paiement échoué — réessaie",
+  "bigbang.continue": "💥 CONTINUER LA COURSE",
+  "bigbang.connectShort": "🔗 CONNECTE UN WALLET",
+  "bigbang.urgency": "Seulement 3 Big Bangs par partie",
+  "bigbang.headline": "Reprends ta course exactement là où tu es mort.",
+  "bigbang.benefit1": "Garde ton score actuel",
+  "bigbang.benefit2": "Garde ta progression",
+  "bigbang.benefit3": "Reste dans la course au classement",
 
   "wallet.connecting": "Connexion en cours…",
   "wallet.cancelled": "Connexion annulée — tu peux réessayer ou continuer en invité.",

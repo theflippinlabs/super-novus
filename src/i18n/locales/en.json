@@ -50,6 +50,13 @@
   "bigbang.paying": "Processing payment…",
   "bigbang.cancelled": "Payment cancelled",
   "bigbang.failed": "Payment failed — try again",
+  "bigbang.continue": "💥 CONTINUE YOUR RUN",
+  "bigbang.connectShort": "🔗 CONNECT A WALLET",
+  "bigbang.urgency": "Only 3 Big Bangs per run",
+  "bigbang.headline": "Resume your run exactly where you died.",
+  "bigbang.benefit1": "Keep your current score",
+  "bigbang.benefit2": "Keep your progress",
+  "bigbang.benefit3": "Stay in the leaderboard race",
 
   "wallet.connecting": "Connecting…",
   "wallet.cancelled": "Connection cancelled — retry or continue as guest.",

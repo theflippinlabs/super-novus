@@ -50,6 +50,13 @@
   "bigbang.paying": "결제 처리 중…",
   "bigbang.cancelled": "결제 취소됨",
   "bigbang.failed": "결제 실패 — 다시 시도하세요",
+  "bigbang.continue": "💥 계속 질주하기",
+  "bigbang.connectShort": "🔗 지갑 연결",
+  "bigbang.urgency": "판당 빅뱅 3회 한정",
+  "bigbang.headline": "죽은 지점에서 그대로 이어서 질주하세요.",
+  "bigbang.benefit1": "현재 점수 유지",
+  "bigbang.benefit2": "진행 상황 유지",
+  "bigbang.benefit3": "순위 경쟁 유지",
 
   "wallet.connecting": "연결 중…",
   "wallet.cancelled": "연결이 취소되었습니다 — 다시 시도하거나 게스트로 계속하세요.",

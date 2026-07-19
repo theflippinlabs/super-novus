@@ -47,6 +47,8 @@ export class UIManager {
   podium = $("podium");
   saveScoreBtn = $("saveScoreBtn") as HTMLButtonElement;
   bigBangBtn = $("bigBangBtn") as HTMLButtonElement;
+  bbLabel = $("bbLabel");
+  bbPrice = $("bbPrice");
   bigBangCount = $("bigBangCount");
   menuBtn = $("menuBtn") as HTMLButtonElement;
   newRecordBadge = $("newRecordBadge");
