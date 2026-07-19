@@ -78,9 +78,14 @@
     z-index:10;text-align:center;padding:22px;overflow-y:auto;-webkit-overflow-scrolling:touch}
   /* Single-screen menu: everything visible at once, no scroll, safe-area aware */
   #menu{justify-content:center;overflow:hidden;padding:22px;
-    padding-top:calc(env(safe-area-inset-top) + 62px);
-    padding-bottom:calc(env(safe-area-inset-bottom) + 14px)}
+    padding-top:calc(env(safe-area-inset-top) + 96px);
+    padding-bottom:calc(env(safe-area-inset-bottom) + 16px)}
   #menu > *{flex-shrink:0}
+  /* Animated cosmos canvas sits behind the UI; content floats above it. The
+     header (#menuTop) keeps its own fixed/z-index:14 — excluded so its language
+     popover layers above the logo. */
+  #menuBg{position:absolute;inset:0;width:100%;height:100%;z-index:0;pointer-events:none;display:block}
+  #menu > *:not(#menuBg):not(#menuTop){position:relative;z-index:1}
   .brand{font-size:11px;letter-spacing:11px;text-indent:11px;color:#9aa6d4;margin-bottom:14px;font-weight:600;opacity:.9}
   h1{font-size:clamp(44px,12vw,84px);font-weight:800;letter-spacing:.1em;line-height:1.02;
     background:linear-gradient(180deg,#ffffff 2%,#d4e8ff 28%,#7db2ff 60%,#2f6fd6 100%);
@@ -93,7 +98,7 @@
   .sunline::before{content:"";position:absolute;left:50%;top:50%;width:9px;height:9px;
     transform:translate(-50%,-50%) rotate(45deg);background:#eaf4ff;border-radius:1px;
     box-shadow:0 0 12px 2px rgba(150,200,255,.9)}
-  .sub{font-size:10.5px;letter-spacing:6px;color:#8f9ac4;margin-bottom:18px;font-weight:600}
+  .sub{font-size:10.5px;letter-spacing:6px;color:#8f9ac4;margin-bottom:12px;font-weight:600}
   .rules{font-size:12.5px;line-height:2;color:#c4cbe8;margin-bottom:30px;max-width:330px;opacity:.94}
   .rules b{color:#cbb6ff;font-weight:700}
   button.big{position:relative;pointer-events:auto;font-family:inherit;font-size:15px;letter-spacing:3.5px;
@@ -200,8 +205,8 @@
   .lbPrize span{color:#c8cfe8;font-weight:600}
 
   /* ===== Podium (top 3) — gold/silver/bronze pedestals, avatars, idle float ===== */
-  .lbPanel{padding:13px 15px 11px}
-  .podium{display:flex;justify-content:center;align-items:flex-end;gap:10px;margin:10px 2px 2px}
+  .lbPanel{padding:11px 15px 9px}
+  .podium{display:flex;justify-content:center;align-items:flex-end;gap:10px;margin:6px 2px 0}
   .pod{flex:1;max-width:106px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;
     cursor:pointer}
   .podTop{display:flex;flex-direction:column;align-items:center;gap:3px;margin-bottom:3px;
@@ -239,43 +244,50 @@
   .podEmpty{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:8px;
     min-height:132px;color:#8b93b8;font-size:11px;letter-spacing:1.5px;font-weight:600;text-align:center;padding:0 20px}
   .podEmojiTrophy{font-size:30px;filter:drop-shadow(0 0 12px rgba(245,197,66,.5));animation:crownBob 2.6s ease-in-out infinite}
-  .lbViewAll{margin-top:9px;pointer-events:auto;font-family:inherit;font-size:10px;letter-spacing:1.8px;
+  .lbViewAll{margin-top:6px;pointer-events:auto;font-family:inherit;font-size:10px;letter-spacing:1.8px;
     font-weight:800;color:#9aa6d4;background:none;border:none;cursor:pointer;width:100%;padding:3px;
     transition:color .2s}
   .lbViewAll:hover{color:#cdd6ff}
   .lbViewAll:active{transform:scale(.98)}
   @media (prefers-reduced-motion: reduce){.podTop,.podCrown{animation:none}}
 
-  /* ===== Menu header — one toolbar, three controls, identical design ===== */
-  #menuTop{position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) + 58px);
-    display:flex;justify-content:flex-end;align-items:center;gap:8px;z-index:14;pointer-events:none;
-    padding:env(safe-area-inset-top) 14px 0;
-    background:linear-gradient(180deg,rgba(6,6,22,.7),rgba(6,6,22,.14) 70%,transparent)}
+  /* ===== Menu header — three identical glass pills, evenly spaced ===== */
+  #menuTop{position:fixed;top:0;left:0;right:0;height:calc(env(safe-area-inset-top) + 78px);
+    display:flex;justify-content:center;align-items:center;gap:12px;z-index:14;pointer-events:none;
+    padding:calc(env(safe-area-inset-top) + 14px) 16px 0;
+    background:linear-gradient(180deg,rgba(6,6,22,.72),rgba(6,6,22,.16) 72%,transparent)}
   #menuTop > *{pointer-events:auto}
   /* shared shell: same height, radius, border, glow, shadow, backdrop for all 3 */
-  .hCtl{height:42px;border-radius:21px;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  .hCtl{height:44px;border-radius:22px;display:flex;align-items:center;justify-content:center;
     border:1px solid rgba(150,170,255,.28);background:rgba(14,18,44,.55);
     -webkit-backdrop-filter:blur(10px);backdrop-filter:blur(10px);
     box-shadow:0 5px 16px rgba(8,10,30,.5), 0 0 14px rgba(120,150,255,.13), inset 0 1px 0 rgba(255,255,255,.08);
     transition:transform .12s,border-color .2s,box-shadow .2s}
-  .hIcon{width:42px;font-size:17px;line-height:1;color:#eaf0ff;cursor:pointer;font-family:inherit;
-    background-size:cover;background-position:center;background-repeat:no-repeat}
-  .hIcon:active{transform:scale(.92)}
-  .hIcon.off{opacity:.5}
-  /* Profile button — reads unmistakably as "my profile": circular identity with a
-     glowing ring. Guest → user silhouette; connected → avatar in a gold ring. */
-  #profileIcon{background-image:url("/appicon.png");position:relative;overflow:visible;background-size:cover;background-position:center}
-  #profileIcon::after{content:"";position:absolute;inset:-2px;border-radius:50%;pointer-events:none;
-    box-shadow:0 0 0 2px rgba(150,170,255,.28), 0 0 13px rgba(120,150,255,.4);transition:box-shadow .25s}
-  #profileIcon.guest{background-size:66%;background-position:center 60%;
-    background-color:rgba(24,30,64,.85);background-repeat:no-repeat}
-  #profileIcon.hasAvatar{background-size:cover}
-  #profileIcon.hasAvatar::after{box-shadow:0 0 0 2px rgba(245,197,66,.72), 0 0 16px rgba(245,197,66,.5)}
-  #profileIcon:active{transform:scale(.92)}
-  .langSel{gap:2px;padding:0 4px}
-  .langBtn{pointer-events:auto;font-family:inherit;font-size:10px;font-weight:800;letter-spacing:.2px;
-    color:#9aa6d4;background:none;border:none;border-radius:13px;padding:8px 6px;cursor:pointer;transition:color .2s,background .2s}
-  .langBtn.active{color:#241a00;background:linear-gradient(180deg,#FFE9A8,#F0B429)}
+  /* all three pills: equal width, one design language */
+  .hPill{flex:0 0 auto;width:80px;gap:5px;padding:0 12px;cursor:pointer;font-family:inherit;color:#eaf0ff;font-size:18px}
+  .hPill:active{transform:scale(.95)}
+  .hPill.off{opacity:.5}
+  .hGlyph{font-size:18px;line-height:1}
+  /* Profile pill — a small circular identity: guest silhouette or avatar in a ring */
+  .pillAv{width:30px;height:30px;border-radius:50%;flex-shrink:0;background-size:cover;background-position:center;
+    background-repeat:no-repeat;background-color:rgba(24,30,64,.85);
+    box-shadow:0 0 0 2px rgba(150,170,255,.3), 0 0 12px rgba(120,150,255,.35);transition:box-shadow .25s}
+  .pillAv.guest{background-size:64%;background-position:center 60%}
+  .pillAv.hasAvatar{box-shadow:0 0 0 2px rgba(245,197,66,.72), 0 0 14px rgba(245,197,66,.5)}
+  /* Language pill — current flag + caret, tap opens a compact chooser */
+  .langPill{position:relative;font-size:18px;letter-spacing:0}
+  .langFlag{line-height:1}
+  .langCaret{font-size:9px;color:#9aa6d4;margin-top:1px}
+  .langMenu{position:absolute;top:52px;right:0;transform:translateY(-6px);
+    display:none;flex-direction:column;gap:5px;padding:7px;min-width:118px;
+    background:rgba(9,12,28,.99);border:1px solid rgba(150,170,255,.34);border-radius:15px;
+    box-shadow:0 16px 40px rgba(0,0,0,.7), 0 0 0 4px rgba(6,8,20,.5);z-index:22;
+    opacity:0;pointer-events:none;transition:opacity .16s,transform .16s}
+  .langMenu.open{display:flex;opacity:1;pointer-events:auto;transform:translateY(0)}
+  .langOpt{font-family:inherit;font-size:12px;font-weight:800;letter-spacing:.5px;color:#c8d2f5;text-align:left;
+    background:rgba(30,40,80,.5);border:1px solid rgba(140,170,255,.16);border-radius:10px;padding:9px 12px;cursor:pointer;
+    transition:background .18s,color .18s}
+  .langOpt.active{color:#241a00;background:linear-gradient(180deg,#FFE9A8,#F0B429);border-color:transparent}
 
   /* ===== Official logo + connected wallet status ===== */
   .logo{width:min(72vw,330px);height:auto;margin:0 0 8px;pointer-events:none;
@@ -292,7 +304,7 @@
   #splash img{width:min(70vw,320px);filter:drop-shadow(0 0 26px rgba(90,150,255,.45))}
 
   /* ===== Controls setting ===== */
-  .setPanel{width:min(86vw,330px);margin:0 0 14px}
+  .setPanel{width:min(86vw,330px);margin:0 0 10px}
   .setTitle{font-size:10px;letter-spacing:3px;color:var(--dim);font-weight:700;margin-bottom:7px;text-align:center}
   .ctrlOpts{display:flex;gap:8px}
   .ctrlOpt{flex:1;pointer-events:auto;font-family:inherit;font-size:11px;font-weight:700;letter-spacing:.4px;
@@ -350,13 +362,18 @@
 <div id="floatLayer"></div>
 
 <div class="screen" id="menu">
+  <canvas id="menuBg" aria-hidden="true"></canvas>
   <div id="menuTop">
-    <button id="menuMusicBtn" class="hCtl hIcon" aria-label="Musique">🎵</button>
-    <button id="profileIcon" class="hCtl hIcon" data-i18n-aria="profile.open" aria-label="Profil"></button>
-    <div class="hCtl langSel" id="langSel">
-      <button class="langBtn" data-lang="fr">🇫🇷 FR</button>
-      <button class="langBtn" data-lang="en">🇬🇧 EN</button>
-      <button class="langBtn" data-lang="ko">🇰🇷 KR</button>
+    <button id="menuMusicBtn" class="hCtl hPill" aria-label="Musique"><span class="hGlyph">🎵</span></button>
+    <button id="profileIcon" class="hCtl hPill" data-i18n-aria="profile.open" aria-label="Profil"><span class="pillAv" id="profileAv"></span></button>
+    <div class="hCtl hPill langPill" id="langPill" role="button" tabindex="0" aria-label="Langue">
+      <span class="langFlag" id="langFlag">🇫🇷</span>
+      <span class="langCaret">▾</span>
+      <div class="langMenu" id="langMenu">
+        <button class="langOpt" data-lang="fr">🇫🇷 FR</button>
+        <button class="langOpt" data-lang="en">🇬🇧 EN</button>
+        <button class="langOpt" data-lang="ko">🇰🇷 KR</button>
+      </div>
     </div>
   </div>
 

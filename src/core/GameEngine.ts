@@ -27,6 +27,7 @@ import { AdminPanel } from "../ui/AdminPanel";
 import { Profile } from "../net/Profile";
 import { ProfilePanel } from "../ui/ProfilePanel";
 import { LeaderboardPage } from "../ui/LeaderboardPage";
+import { MenuBackground } from "../ui/MenuBackground";
 import { Joystick } from "../input/Joystick";
 import { Diagnostics } from "../ui/Diagnostics";
 import { i18n } from "../i18n";
@@ -103,6 +104,9 @@ export class GameEngine {
     this.profilePanel.setIdentityListener(() => { this._refreshIdentity(); this._refreshBoards(); });
     // Full competitive leaderboard, opened by tapping the home-screen podium.
     this.leaderboardPage = new LeaderboardPage(this.leaderboard, this.wallet, this.profile);
+    // Living cosmos behind the home-screen UI (paused during gameplay).
+    this.menuBackground = new MenuBackground(document.getElementById("menuBg") as HTMLCanvasElement);
+    this.menuBackground.start();
     // Score-pipeline diagnostic (?diag=1) — zero cost otherwise.
     if (new URLSearchParams(location.search).get("diag") === "1")
       this.diagnostics = new Diagnostics(this.leaderboard, this.wallet);
@@ -375,9 +379,23 @@ export class GameEngine {
     // Wallet status chip (avatar + nickname) opens the profile — disconnect lives there.
     this.ui.walletStatus.addEventListener("click", () => this._openProfile());
 
-    // Language selector (instant switch, persisted).
-    for (const b of document.querySelectorAll<HTMLButtonElement>(".langBtn"))
-      b.addEventListener("click", () => { const l = b.dataset.lang; if (l) this._setLang(l as Lang); });
+    // Language selector — a compact flag pill that opens a chooser popover.
+    const langPill = document.getElementById("langPill");
+    const langMenu = document.getElementById("langMenu");
+    langPill?.addEventListener("click", (e) => {
+      if ((e.target as HTMLElement).closest(".langOpt")) return;  // option handles itself
+      langMenu?.classList.toggle("open");
+    });
+    for (const o of document.querySelectorAll<HTMLButtonElement>(".langOpt"))
+      o.addEventListener("click", (e) => {
+        e.stopPropagation();
+        const l = o.dataset.lang; if (l) this._setLang(l as Lang);
+        langMenu?.classList.remove("open");
+      });
+    // Tap outside the pill closes the chooser.
+    document.addEventListener("click", (e) => {
+      if (!(e.target as HTMLElement).closest("#langPill")) langMenu?.classList.remove("open");
+    });
     this.ui.setLangActive(i18n.get());
     i18n.onChange(() => this._onLangChange());
 
@@ -425,6 +443,7 @@ export class GameEngine {
     this.env.spawnDecor(0, "distant"); this.env.spawnDecor(0, "distant"); this.env.spawnDecor(0, "medium");
     this.ui.setLives(this.lives, CFG.lives);
     this.ui.menu.style.display = "none";
+    this.menuBackground?.setVisible(false);   // pause the cosmos canvas during play
     this.ui.gameover.style.display = "none";
     this.ui.hud.style.display = "block";
     this.ui.pauseBtn.style.display = "flex";
@@ -759,6 +778,7 @@ export class GameEngine {
     this.ui.musicBtn.style.display = "none";   // menu uses the header music button
     this.ui.gameover.style.display = "none";
     this.ui.menu.style.display = "flex";
+    this.menuBackground?.setVisible(true);     // resume the living cosmos on the menu
     this._refreshBoards();
   }
 
