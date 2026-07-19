@@ -95,6 +95,9 @@ export class BigBangStore {
     try {
       // Connect on demand (explicit user action — no silent deep link).
       if (!this.wallet.getAddress()) await this.wallet.connect();
+      // Make sure we're on Cronos BEFORE paying. If we can't switch automatically,
+      // show a Switch button + manual steps rather than a dead-end error.
+      if (!(await this.wallet.ensureCronos())) { this.showSwitch(pack); return; }
       const txHash = await this.wallet.payCRO(BIG_BANG_RECIPIENT, pack.priceCRO);
       this.credits.addPack(pack, txHash, Date.now());
       this.onChange();
@@ -102,11 +105,12 @@ export class BigBangStore {
       this.msg(t("store.purchased", { n: pack.credits }), true);
     } catch (e) {
       const reason = e instanceof PayError ? e.reason : "failed";
+      if (reason === "wrong-chain") { this.showSwitch(pack); return; }
       const raw = e instanceof Error ? e.message : String(e ?? "");
+      const rejectedConnect = !(e instanceof PayError) && /reject|denied|refus|cancel|annul|close|4001/i.test(raw);
       this.msg(
-        reason === "rejected"      ? t("bigbang.errRejected")
+        reason === "rejected" || rejectedConnect ? t("bigbang.errRejected")
         : reason === "funds"       ? t("store.errFunds", { n: this.cro(pack.priceCRO) })
-        : reason === "wrong-chain" ? t("bigbang.errChain")
         : reason === "no-wallet"   ? t("bigbang.errNoWallet")
         : t("bigbang.errGeneric", { reason: raw.slice(0, 120) || "?" }),
       );
@@ -114,6 +118,29 @@ export class BigBangStore {
     } finally {
       this.busy = false;
     }
+  }
+
+  /** Not on Cronos: offer a one-tap switch, and explain how to do it manually if
+      the wallet can't switch programmatically. Never a dead-end error. */
+  private showSwitch(pack: BigBangPack): void {
+    this.busy = false;
+    this.el.querySelectorAll<HTMLButtonElement>(".bbsBuy").forEach((b) => (b.disabled = false));
+    const m = this.el.querySelector("#bbsMsg") as HTMLElement | null;
+    if (!m) return;
+    m.className = "bbsMsg";
+    m.innerHTML = `
+      <div class="bbsSwitch">
+        <div class="bbsSwitchTitle">⚠ ${t("store.switchTitle")}</div>
+        <button class="bbsSwitchBtn" id="bbsSwitchBtn">${t("store.switchBtn")}</button>
+        <div class="bbsSwitchManual">${t("store.switchManual")}</div>
+      </div>`;
+    const btn = m.querySelector("#bbsSwitchBtn") as HTMLButtonElement;
+    btn.addEventListener("click", async () => {
+      btn.disabled = true; btn.textContent = t("store.switching");
+      const ok = await this.wallet.ensureCronos();
+      if (ok) { this.buy(pack.id); }                 // switched → retry the purchase
+      else { btn.disabled = false; btn.textContent = t("store.switchBtn"); } // manual steps stay
+    });
   }
 
   private injectStyles(): void {
@@ -172,6 +199,15 @@ export class BigBangStore {
     .bbsMsg.err{color:#ff9db0}
     .bbsMsg.ok{color:#8dffbe}
     .bbsMsg:empty{display:none}
+    .bbsSwitch{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:14px;padding:16px;
+      border-radius:16px;background:rgba(255,150,60,.08);border:1px solid rgba(255,150,60,.34)}
+    .bbsSwitchTitle{font-size:12.5px;font-weight:800;color:#ffd7a0;letter-spacing:.3px}
+    .bbsSwitchBtn{font-family:inherit;font-weight:800;font-size:13px;letter-spacing:1px;text-transform:uppercase;color:#241a00;
+      padding:12px 22px;border:none;border-radius:12px;cursor:pointer;
+      background:linear-gradient(180deg,#FFF0BE,#F0B429 60%,#D48E12);box-shadow:0 6px 16px rgba(240,180,40,.4)}
+    .bbsSwitchBtn:active{transform:scale(.97)}
+    .bbsSwitchBtn:disabled{opacity:.6;cursor:default}
+    .bbsSwitchManual{font-size:10.5px;font-weight:500;line-height:1.5;color:#c4cbe8;max-width:300px}
     @media (prefers-reduced-motion: reduce){.bbsOverlay,.bbsSheet{animation:none}}
     `;
     document.head.appendChild(s);
