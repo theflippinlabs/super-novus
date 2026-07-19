@@ -84,6 +84,16 @@ export class Profile {
     if (!p.created_at) { p.created_at = new Date().toISOString(); this.writeProfile(addr, p); }
   }
 
+  /** Lift the cached best score to at least the leaderboard's (source of truth),
+      so the local profile can never display below the server after a cross-device
+      or cross-session play. Totals (dist/dust) stay lifetime-accumulated. */
+  recordBest(score: number, _dist: number, _dust: number): void {
+    const addr = this.wallet.getAddress();
+    if (!addr) return;
+    const s = this.readStats(addr);
+    if (Math.floor(score) > s.high_score) { s.high_score = Math.floor(score); this.writeStats(addr, s); }
+  }
+
   /* ---------- storage ---------- */
   private readProfile(wallet: string): StoredProfile {
     try {

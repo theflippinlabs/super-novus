@@ -181,6 +181,8 @@
   .bbBenefits span{font-size:11px;color:#dccdff;letter-spacing:.2px;font-weight:600}
   .bbBenefits span::before{content:"✓";color:#8dffbe;font-weight:800;margin-right:7px}
   #bigBangCount{font-size:9px;letter-spacing:2.5px;color:#a48fd0;font-weight:700;margin-top:10px}
+  .bbError{font-size:11px;line-height:1.4;color:#ff9db0;font-weight:700;margin-top:8px;letter-spacing:.2px;max-width:290px;margin-left:auto;margin-right:auto}
+  .bbError:empty{display:none}
   @media (prefers-reduced-motion: reduce){#bigBangCard,.bbBtn,.bbBtn::after,.bbParticles i{animation:none}}
   #menuBtn{margin-top:12px}
   .pulse{animation:pulse 2.6s ease-in-out infinite}
@@ -499,6 +501,7 @@
       <span data-i18n="bigbang.benefit3">Reste dans la course au classement</span>
     </div>
     <div id="bigBangCount"></div>
+    <div id="bigBangError" class="bbError"></div>
   </div>
 
   <!-- 3) Save Score  4) Back to Menu -->
