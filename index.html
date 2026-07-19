@@ -261,6 +261,25 @@
   .lbPrize{font-size:10px;letter-spacing:1.5px;color:var(--gold);font-weight:700;margin:0 0 8px;text-align:center;line-height:1.55}
   .lbPrize span{color:#c8cfe8;font-weight:600}
 
+  /* ===== Home: single "Galactic Leaderboard" card (sells competition, opens page) ===== */
+  .lbCard{position:relative;width:min(86vw,330px);margin:0;pointer-events:auto;font-family:inherit;cursor:pointer;
+    display:flex;flex-direction:column;align-items:center;gap:7px;padding:16px 18px 15px;border-radius:18px;text-align:center;overflow:hidden;
+    background:radial-gradient(120% 90% at 50% 0%, rgba(245,197,66,.16), transparent 58%),
+      linear-gradient(180deg,rgba(30,30,66,.6),rgba(14,14,40,.66));
+    border:1px solid rgba(245,197,66,.34);
+    box-shadow:0 10px 26px rgba(8,10,30,.5), 0 0 20px rgba(245,197,66,.12) inset;
+    transition:transform .12s,border-color .2s,box-shadow .2s}
+  .lbCard:hover{border-color:rgba(245,197,66,.6);box-shadow:0 12px 30px rgba(8,10,30,.55), 0 0 26px rgba(245,197,66,.2) inset}
+  .lbCard:active{transform:scale(.99)}
+  .lbCardHead{font-size:14px;font-weight:800;letter-spacing:1.5px;color:#fff;display:flex;align-items:center;gap:7px}
+  .lbCardHead span{background:linear-gradient(180deg,#fff,#ffe6a8 60%,#F0B429);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+  .lbCardSub{font-size:10.5px;color:#a7b0d0;letter-spacing:.2px}
+  .lbCardFeats{display:flex;flex-wrap:wrap;justify-content:center;gap:5px 8px;margin:5px 0 3px}
+  .lbCardFeats span{font-size:9.5px;font-weight:700;letter-spacing:.2px;color:#d8cfa4;
+    background:rgba(245,197,66,.1);border:1px solid rgba(245,197,66,.26);border-radius:20px;padding:4px 10px}
+  .lbCardFeats span::before{content:"✦ ";color:var(--gold)}
+  .lbCardCta{margin-top:6px;font-size:11px;font-weight:800;letter-spacing:1.5px;color:var(--gold)}
+
   /* ===== Podium (top 3) — gold/silver/bronze pedestals, avatars, idle float ===== */
   .lbPanel{padding:10px 15px 9px}
   .podium{display:flex;justify-content:center;align-items:flex-end;gap:10px;margin:2px 2px 0}
@@ -474,15 +493,16 @@
     </div>
   </div>
 
-  <div class="lbPanel">
-    <div class="lbTabs">
-      <button class="lbTab active" data-period="weekly" data-i18n="menu.tabWeekly">COMPÉTITION HEBDO</button>
-      <button class="lbTab" data-period="monthly" data-i18n="menu.tabMonthly">COMPÉTITION MENSUELLE</button>
+  <button id="lbCard" class="lbCard">
+    <div class="lbCardHead">🏆 <span data-i18n="lb.title">CLASSEMENT GALACTIQUE</span></div>
+    <div class="lbCardSub" data-i18n="lb.cardSub">Affronte des joueurs du monde entier.</div>
+    <div class="lbCardFeats">
+      <span data-i18n="menu.tabWeekly">Compétition hebdo</span>
+      <span data-i18n="menu.tabMonthly">Compétition mensuelle</span>
+      <span data-i18n="lb.featRewards">Récompenses CRO réelles</span>
     </div>
-    <div class="lbPrize" id="lbPrize">🏆 <b>TOP 1 · ≈$25</b> <span>payé en CRO — compétition hebdo</span></div>
-    <div id="podium" class="podium"></div>
-    <button class="lbViewAll" id="lbViewAll" data-i18n="lb.viewFull">VOIR LE CLASSEMENT COMPLET →</button>
-  </div>
+    <div class="lbCardCta" data-i18n="lb.viewCard">VOIR LE CLASSEMENT →</div>
+  </button>
 </div>
 
 <div class="screen" id="pauseScreen">

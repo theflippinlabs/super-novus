@@ -105,10 +105,10 @@ export class GameEngine {
     this.credits = new BigBangCredits(this.wallet);
     // Player profile dashboard (avatar + nickname + stats/credits/history).
     this.profilePanel = new ProfilePanel(this.profile, this.wallet, this.leaderboard, this.credits);
-    this.profilePanel.setIdentityListener(() => { this._refreshIdentity(); this._refreshBoards(); });
+    this.profilePanel.setIdentityListener(() => this._refreshIdentity());
     this.profilePanel.setStoreOpener(() => this.bbStore.open());
-    // Full competitive leaderboard, opened by tapping the home-screen podium.
-    this.leaderboardPage = new LeaderboardPage(this.leaderboard, this.wallet, this.profile);
+    // Dedicated competition hub, opened from the home "Galactic Leaderboard" card.
+    this.leaderboardPage = new LeaderboardPage(this.leaderboard, this.wallet, this.profile, this.prizePool);
     // Living cosmos behind the home-screen UI (paused during gameplay).
     this.menuBackground = new MenuBackground(document.getElementById("menuBg") as HTMLCanvasElement);
     this.menuBackground.start();
@@ -159,15 +159,12 @@ export class GameEngine {
   }
 
   async _initAuth(){
-    this.lbPeriod = "weekly";      // "weekly" | "monthly"
-    this._pool = this.prizePool.staticPool(); // instant guaranteed figures; upgraded live below
-    this.ui.setPrizePool(this.lbPeriod, this._pool);
-    this._bindLbTabs();
+    // The home screen only sells the game — all ranking/prize UI lives on the
+    // dedicated LeaderboardPage, which fetches its own data + prize pool on open.
     const refresh = () => this.ui.setAuth(this.wallet.getAddress(), this.wallet.available, this.wallet.getChainId());
     this.wallet.onChange(() => {
       refresh();
       this._refreshIdentity();       // avatar + nickname chip (never the address)
-      this._refreshBoards();
       this._updateStoreChip();       // credits are per-wallet — refresh the balance chip
       // NO automatic score submission here: publishing a score needs a signature
       // (a wallet deep link on iOS), which must ONLY happen on an explicit
@@ -177,37 +174,10 @@ export class GameEngine {
     this._refreshIdentity();       // guest silhouette in the profile button from boot
     this._updateStoreChip();       // show owned credits on the store entry from boot
     this.leaderboard.diagnose();   // logs exact Supabase connectivity status on boot
-    await this._refreshBoards();
-    this._refreshPrizePool();      // live weekly/monthly prize pool on the menu board
     // best local (offline-first) affiché dès le menu
     this.best = this.leaderboard.getLocalBest().score;
     const addr = await this.wallet.tryReconnect();  // silent injected/WC reconnect
-    if (addr){ refresh(); this._refreshIdentity(); this._refreshBoards(); }
-  }
-
-  /** Weekly/monthly tab clicks across both leaderboard panels. */
-  _bindLbTabs(){
-    for (const btn of document.querySelectorAll<HTMLButtonElement>(".lbTab")){
-      btn.addEventListener("click", () => {
-        const period = btn.dataset.period;
-        if (!period || period === this.lbPeriod) return;
-        this.lbPeriod = period;
-        this.ui.setLbTab(period);
-        this._refreshBoards();
-        this.ui.setPrizePool(this.lbPeriod, this._pool ?? null); // re-render for the new tab
-      });
-    }
-  }
-
-  /** Fetch the live prize pool (weekly + monthly community bonus) and show it on
-      the leaderboard panel for the active tab. Cheap; safe to call repeatedly. */
-  async _refreshPrizePool(){
-    try {
-      this._pool = await this.prizePool.compute();
-      this.ui.setPrizePool(this.lbPeriod, this._pool);
-    } catch (e){
-      console.warn("[PrizePool] refresh failed:", e);
-    }
+    if (addr){ refresh(); this._refreshIdentity(); }
   }
 
   /* ---------- controls, language, profile ---------- */
@@ -234,9 +204,7 @@ export class GameEngine {
   _onLangChange(){
     this.ui.setLangActive(i18n.get());
     this.ui.setControlActive(this.controlMode);
-    if (this._pool) this.ui.setPrizePool(this.lbPeriod, this._pool);
     this._updateBigBangButton();
-    this._refreshBoards();
     this._refreshIdentity();
   }
 
@@ -260,13 +228,6 @@ export class GameEngine {
 
   /** The current player's own identity for their podium/board row (chosen name +
       avatar), or null when playing as guest. Never exposes the address. */
-  _meIdentity(){
-    const addr = this.wallet.getAddress();
-    if (!addr) return null;
-    const id = this.profile.cachedIdentity(addr);
-    return { wallet: addr, nickname: id.nickname, avatar: id.avatar };
-  }
-
   /** After an explicit connect: show identity, and prompt for a nickname if none. */
   async _afterConnect(){
     await this._refreshIdentity();
@@ -274,17 +235,6 @@ export class GameEngine {
     if (!addr || !this.profile.available) return;
     const row = await this.profile.get();
     if (!row || !row.nickname) this.profilePanel.openNicknameSetup();
-  }
-
-  /** Fetch the current period's board once and render it into both panels.
-      Explicit, non-blocking state when the online leaderboard isn't configured. */
-  async _refreshBoards(){
-    const meId = this._meIdentity();
-    // Compact one-screen preview = the top-3 podium. Empty (or unconfigured) →
-    // neutral pedestals. The full ranking lives on the tap-through LeaderboardPage.
-    if (!this.leaderboard.available){ this.ui.renderPodium([], meId); return; }
-    const rows = await this.leaderboard.top(this.lbPeriod, 3);
-    this.ui.renderPodium(rows, meId);
   }
 
   _bindInput(){
@@ -372,7 +322,6 @@ export class GameEngine {
         await this.wallet.connect();
         this.ui.setAuth(this.wallet.getAddress(), this.wallet.available, this.wallet.getChainId());
         await this._afterConnect();       // identity chip + nickname prompt if new
-        await this._refreshBoards();
       } catch (e) {
         this.ui.setAuth(null, this.wallet.available, null);
         // Graceful handling: a user-rejected connection is not an error state.
@@ -417,9 +366,8 @@ export class GameEngine {
     // Profile — open the dashboard from the circular header icon.
     this.ui.profileIcon.addEventListener("click", () => this._openProfile());
     // Podium is a preview — tapping it (or "view all") opens the full leaderboard.
-    const openLb = () => this.leaderboardPage.open(this.lbPeriod);
-    this.ui.podium.addEventListener("click", openLb);
-    document.getElementById("lbViewAll")?.addEventListener("click", openLb);
+    // Home "Galactic Leaderboard" card → the dedicated competition page (weekly first).
+    document.getElementById("lbCard")?.addEventListener("click", () => this.leaderboardPage.open("weekly"));
     // Menu header music toggle (mirrors the in-game HUD button).
     this.ui.menuMusicBtn.addEventListener("click", () => {
       const on = this.music.toggle();
@@ -653,7 +601,6 @@ export class GameEngine {
       this.ui.gameover.style.display = "flex";
       this.ui.hud.style.display = "none";
       this.ui.pauseBtn.style.display = "none";
-      this._refreshBoards();
     }, 1400);
   }
 
@@ -682,7 +629,6 @@ export class GameEngine {
       btn.style.display = "none";
       const [w, m] = await Promise.all([this.leaderboard.myRank("weekly"), this.leaderboard.myRank("monthly")]);
       this.ui.setRank("weekly", w); this.ui.setRank("monthly", m);
-      this._refreshBoards();
       // Keep the profile in lock-step with the leaderboard the instant a score is
       // saved — best score + ranks update with no reconnect / reload required.
       this.profile.recordBest(r.score, r.dist, r.dust);
@@ -801,7 +747,6 @@ export class GameEngine {
       const buyer = this.wallet.getAddress();
       if (buyer && txHash){
         this.prizePool.recordPurchase(buyer, txHash, price)
-          .then(() => this._refreshPrizePool())
           .catch((err) => console.warn("[BigBang] revenue record failed:", err));
       }
       this._bigBangRevive();           // resume exactly where we died — no Game Over
@@ -868,7 +813,6 @@ export class GameEngine {
     this.ui.gameover.style.display = "none";
     this.ui.menu.style.display = "flex";
     this.menuBackground?.setVisible(true);     // resume the living cosmos on the menu
-    this._refreshBoards();
   }
 
   _loop(){
