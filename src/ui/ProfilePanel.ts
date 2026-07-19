@@ -8,6 +8,7 @@
 import { Profile, type ProfileRow, type ProfileStats } from "../net/Profile";
 import { Leaderboard } from "../net/Leaderboard";
 import { WalletManager } from "../net/WalletManager";
+import { BigBangCredits } from "../net/BigBangCredits";
 import { i18n, t } from "../i18n";
 
 const DEFAULT_AVATAR = "/appicon.png";   // official Super Novus icon until one is uploaded
@@ -18,8 +19,9 @@ const BCP47: Record<string, string> = { fr: "fr-FR", en: "en-US", ko: "ko-KR" };
 export class ProfilePanel {
   private el: HTMLElement;
   private onIdentityChange: (() => void) | null = null;
+  private openStore: (() => void) | null = null;
 
-  constructor(private profile: Profile, private wallet: WalletManager, private leaderboard: Leaderboard) {
+  constructor(private profile: Profile, private wallet: WalletManager, private leaderboard: Leaderboard, private credits: BigBangCredits) {
     this.injectStyles();
     const el = document.createElement("div");
     el.id = "profilePanel";
@@ -32,6 +34,8 @@ export class ProfilePanel {
 
   /** Called after a successful save so the menu can refresh the identity chip. */
   setIdentityListener(cb: () => void): void { this.onIdentityChange = cb; }
+  /** Lets the "Buy more" action open the Big Bang Store. */
+  setStoreOpener(cb: () => void): void { this.openStore = cb; }
 
   isOpen(): boolean { return this.el.style.display !== "none"; }
   close(): void { this.el.style.display = "none"; this.el.innerHTML = ""; }
@@ -204,11 +208,22 @@ export class ProfilePanel {
           <div class="pfTile"><div class="pfTileIc">${ic}</div><div class="pfTileV"${id ? ` id="${id}"` : ""}>${v}</div><div class="pfTileL">${l}</div></div>`).join("")}
         </div></div>`;
 
+    // Big Bang Credits — the player's balance; tap to see purchase history.
+    const credits = `
+      <button class="pfCredits" id="pfCredits">
+        <span class="pfCredIc">💥</span>
+        <span class="pfCredCol">
+          <span class="pfCredV">${this.credits.available(addr)} <em>${t("profile.creditsUnit")}</em></span>
+          <span class="pfCredL">${t("profile.credits")}</span>
+        </span>
+        <span class="pfCredArrow">›</span>
+      </button>`;
+
     // Game history + reward history are intentionally out of scope for now
     // (frontend-first). They'll return with the Supabase-backed profile.
     // Disconnect lives here — never on the home screen.
     const disconnect = `<button id="pfDisconnect" class="pfBtn pfDanger">${t("menu.logout")}</button>`;
-    return `<div class="pfCard">${head}${configWarn}${meta}${ranks}${statsGrid}${disconnect}</div>`;
+    return `<div class="pfCard">${head}${configWarn}${meta}${credits}${ranks}${statsGrid}${disconnect}</div>`;
   }
 
   private bindShell(row?: ProfileRow | null): void {
@@ -226,6 +241,39 @@ export class ProfilePanel {
     const file = this.el.querySelector("#pfAvatarFile") as HTMLInputElement | null;
     fileBtn?.addEventListener("click", () => file?.click());
     file?.addEventListener("change", () => this.onAvatarFile(file));
+    // Big Bang Credits → purchase history.
+    this.el.querySelector("#pfCredits")?.addEventListener("click", () => this.showHistory());
+  }
+
+  /* ===================== Big Bang credits: purchase history ===================== */
+  private showHistory(): void {
+    const addr = this.wallet.getAddress();
+    const bal = this.credits.available(addr ?? undefined);
+    const items = this.credits.history(addr ?? undefined);
+    const rows = items.length
+      ? items.map((h) => `
+          <div class="pfHistRow">
+            <span class="pfHistIc">${h.emoji}</span>
+            <span class="pfHistMid">
+              <span class="pfHistName">${esc(t(`store.pack.${h.packId}`))}</span>
+              <span class="pfHistSub">${this.date(new Date(h.ts).toISOString())} · +${h.credits} 💥</span>
+            </span>
+            <span class="pfHistCro">${this.num(h.cro)} CRO</span>
+          </div>`).join("")
+      : `<div class="pfMuted pfPad">${t("history.empty")}</div>`;
+    this.el.innerHTML = `
+      <div class="pfCard">
+        <div class="pfHead">
+          <button id="pfBack" class="pfX" aria-label="${t("common.close")}">‹</button>
+          <div class="pfName" style="flex:1;text-align:center">${t("profile.creditHistory")}</div>
+          <div style="width:36px"></div>
+        </div>
+        <div class="pfCredBig">💥 ${bal} <span>${t("profile.creditsUnit")}</span></div>
+        <div class="pfHistList">${rows}</div>
+        <button id="pfBuyMore" class="pfBtn pfBtnGold">${t("store.buyMore")}</button>
+      </div>`;
+    this.el.querySelector("#pfBack")?.addEventListener("click", () => this.render());
+    this.el.querySelector("#pfBuyMore")?.addEventListener("click", () => { this.openStore?.(); });
   }
 
   private inlineNickname(row: ProfileRow | null): void {
@@ -307,6 +355,27 @@ export class ProfilePanel {
       .pfMetaRow span{color:var(--dim);letter-spacing:1px;flex-shrink:0}
       .pfMetaRow b{color:#e6ebff;font-weight:700;text-align:right;min-width:0}
       .pfAddr{font-family:ui-monospace,Menlo,monospace;font-size:10.5px;word-break:break-all;color:#9fb0e0}
+      .pfCredits{width:100%;display:flex;align-items:center;gap:12px;margin:0 0 14px;padding:13px 15px;cursor:pointer;
+        font-family:inherit;border-radius:14px;text-align:left;
+        background:radial-gradient(120% 200% at 0% 0%, rgba(160,110,255,.32), transparent 55%),linear-gradient(180deg,rgba(52,34,96,.55),rgba(24,16,56,.6));
+        border:1px solid rgba(170,130,255,.4);box-shadow:0 6px 18px rgba(40,24,96,.35)}
+      .pfCredits:active{transform:scale(.99)}
+      .pfCredIc{font-size:24px;line-height:1;filter:drop-shadow(0 0 8px rgba(170,120,255,.7))}
+      .pfCredCol{display:flex;flex-direction:column;flex:1;min-width:0}
+      .pfCredV{font-size:19px;font-weight:800;color:#fff}
+      .pfCredV em{font-style:normal;font-size:11px;font-weight:700;color:#c9b8ff;letter-spacing:1px}
+      .pfCredL{font-size:9px;letter-spacing:1.5px;color:#a99ad0;font-weight:700;text-transform:uppercase;margin-top:1px}
+      .pfCredArrow{font-size:22px;color:#a99ad0;font-weight:400}
+      .pfCredBig{text-align:center;font-size:26px;font-weight:800;color:var(--gold);margin:6px 0 16px}
+      .pfCredBig span{font-size:12px;color:#c9b8ff;letter-spacing:1px}
+      .pfHistList{display:flex;flex-direction:column;gap:8px;margin-bottom:16px;max-height:50vh;overflow-y:auto}
+      .pfHistRow{display:flex;align-items:center;gap:11px;padding:11px 12px;border-radius:12px;
+        background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.06)}
+      .pfHistIc{font-size:22px;line-height:1}
+      .pfHistMid{display:flex;flex-direction:column;flex:1;min-width:0}
+      .pfHistName{font-size:13px;font-weight:800;color:#eaf0ff}
+      .pfHistSub{font-size:10px;color:#8b93b8;margin-top:1px}
+      .pfHistCro{font-size:13px;font-weight:800;color:var(--gold);white-space:nowrap}
       .pfRanks{display:flex;gap:8px;margin-bottom:16px}
       .pfRank{flex:1;background:rgba(20,26,58,.5);border:1px solid rgba(140,170,255,.16);border-radius:12px;padding:10px 6px;text-align:center}
       .pfRankV{font-size:20px;font-weight:800;color:var(--gold);font-variant-numeric:tabular-nums}

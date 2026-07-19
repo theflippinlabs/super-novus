@@ -49,6 +49,7 @@ export class UIManager {
   bigBangBtn = $("bigBangBtn") as HTMLButtonElement;
   bbLabel = $("bbLabel");
   bbPrice = $("bbPrice");
+  bbBadge = $("bbBadge");
   bigBangCount = $("bigBangCount");
   bigBangError = $("bigBangError");
   menuBtn = $("menuBtn") as HTMLButtonElement;

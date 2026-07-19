@@ -28,6 +28,8 @@ import { Profile } from "../net/Profile";
 import { ProfilePanel } from "../ui/ProfilePanel";
 import { LeaderboardPage } from "../ui/LeaderboardPage";
 import { MenuBackground } from "../ui/MenuBackground";
+import { BigBangCredits } from "../net/BigBangCredits";
+import { BigBangStore } from "../ui/BigBangStore";
 import { Joystick } from "../input/Joystick";
 import { Diagnostics } from "../ui/Diagnostics";
 import { i18n } from "../i18n";
@@ -99,14 +101,18 @@ export class GameEngine {
       this.payouts = new Payouts(this.wallet, this.prizePool);
       this.admin = new AdminPanel(this.payouts, this.wallet);
     }
-    // Player profile dashboard (avatar + nickname + stats/history/rewards).
-    this.profilePanel = new ProfilePanel(this.profile, this.wallet, this.leaderboard);
+    // Big Bang Packs — buy credits in advance; revives then consume them instantly.
+    this.credits = new BigBangCredits(this.wallet);
+    // Player profile dashboard (avatar + nickname + stats/credits/history).
+    this.profilePanel = new ProfilePanel(this.profile, this.wallet, this.leaderboard, this.credits);
     this.profilePanel.setIdentityListener(() => { this._refreshIdentity(); this._refreshBoards(); });
+    this.profilePanel.setStoreOpener(() => this.bbStore.open());
     // Full competitive leaderboard, opened by tapping the home-screen podium.
     this.leaderboardPage = new LeaderboardPage(this.leaderboard, this.wallet, this.profile);
     // Living cosmos behind the home-screen UI (paused during gameplay).
     this.menuBackground = new MenuBackground(document.getElementById("menuBg") as HTMLCanvasElement);
     this.menuBackground.start();
+    this.bbStore = new BigBangStore(this.wallet, this.credits, () => this._onCreditsChanged());
     // Score-pipeline diagnostic (?diag=1) — zero cost otherwise.
     if (new URLSearchParams(location.search).get("diag") === "1")
       this.diagnostics = new Diagnostics(this.leaderboard, this.wallet);
@@ -162,12 +168,14 @@ export class GameEngine {
       refresh();
       this._refreshIdentity();       // avatar + nickname chip (never the address)
       this._refreshBoards();
+      this._updateStoreChip();       // credits are per-wallet — refresh the balance chip
       // NO automatic score submission here: publishing a score needs a signature
       // (a wallet deep link on iOS), which must ONLY happen on an explicit
       // "Save score" tap — never on a silent reconnect / tab resume.
     });
     refresh();
     this._refreshIdentity();       // guest silhouette in the profile button from boot
+    this._updateStoreChip();       // show owned credits on the store entry from boot
     this.leaderboard.diagnose();   // logs exact Supabase connectivity status on boot
     await this._refreshBoards();
     this._refreshPrizePool();      // live weekly/monthly prize pool on the menu board
@@ -336,7 +344,9 @@ export class GameEngine {
     this.ui.playBtn.addEventListener("click", () => { this.audio.init(); this.start(); });
     // Game Over — two choices only: Big Bang (paid continue) or Return to Menu.
     this.ui.saveScoreBtn.addEventListener("click", () => this._saveScore());
-    this.ui.bigBangBtn.addEventListener("click", () => this._buyBigBang());
+    this.ui.bigBangBtn.addEventListener("click", () => this._bigBangAction());
+    // Big Bang Store (menu) — buy packs of credits in advance.
+    document.getElementById("storeBtn")?.addEventListener("click", () => this.bbStore.open());
     this.ui.menuBtn.addEventListener("click", () => this._returnToMenu());
     this.ui.pauseBtn.addEventListener("click", () => {
       if (!this.running) return;
@@ -684,12 +694,14 @@ export class GameEngine {
     }
   }
 
-  /** Reflect Big Bang state: dynamic price per revive (#1/#2/#3), usage count,
-      and the permanent "max reached" state after the 3rd. */
-  /** Render the Big Bang hero button: an action label + a gold CRO price badge.
-      The price badge only shows when a purchase is actually possible/priced. */
+  /** Render the Big Bang hero button. Two modes:
+      - CREDIT: the player owns Big Bang credits → instant, no-wallet revive. Shows
+        "💥 Big Bang available", the button consumes one credit on tap.
+      - BUY: no credits → the existing escalating CRO purchase (#1/#2/#3).
+      The 3-per-run limit is enforced in BOTH modes. `_bbMode` drives the click. */
   _updateBigBangButton(){
     const btn = this.ui.bigBangBtn;
+    const badge = this.ui.bbBadge;
     const setLabel = (text: string, showPrice: boolean, price?: number) => {
       this.ui.bbLabel.textContent = text;
       if (showPrice && price !== undefined){
@@ -700,11 +712,29 @@ export class GameEngine {
       }
     };
     this.ui.setBigBangCount(this.bigBangs, BIG_BANG_MAX);
+
+    // Per-run limit is absolute — 3 Big Bangs max, credits or not.
     if (this.bigBangs >= BIG_BANG_MAX){
+      this._bbMode = "none";
       setLabel(i18n.t("bigbang.max"), false);
       btn.disabled = true;
+      badge.textContent = "🔥 " + i18n.t("bigbang.urgency");
       return;
     }
+
+    const credits = this.credits.available();
+    if (credits > 0){
+      // CREDIT mode — instant revive, no wallet. Show the balance in the button.
+      this._bbMode = "credit";
+      badge.textContent = "💥 " + i18n.t("bigbang.available");
+      setLabel(i18n.t("bigbang.continueCredit", { n: credits }), false);
+      btn.disabled = false;
+      return;
+    }
+
+    // BUY mode — no credits, fall back to the escalating CRO purchase.
+    this._bbMode = "buy";
+    badge.textContent = "🔥 " + i18n.t("bigbang.urgency");
     const n = this.bigBangs + 1;                 // this purchase would be #n
     const price = BIG_BANG_PRICES[this.bigBangs]; // 10 / 20 / 40
     if (!BIG_BANG_RECIPIENT){
@@ -717,6 +747,40 @@ export class GameEngine {
       setLabel(i18n.t("bigbang.continue"), true, price);
       btn.disabled = false;
     }
+  }
+
+  /** The Big Bang button dispatches by mode: spend a credit instantly, or buy. */
+  _bigBangAction(){
+    if (this.bigBangs >= BIG_BANG_MAX) return;
+    if (this._bbMode === "credit") this._useBigBangCredit();
+    else if (this._bbMode === "buy") this._buyBigBang();
+  }
+
+  /** Instant, frictionless revive using an owned credit — no wallet, no signature. */
+  _useBigBangCredit(){
+    if (this.bigBangs >= BIG_BANG_MAX) return;
+    if (!this.credits.consume()) { this._updateBigBangButton(); return; }
+    this.bigBangs++;                 // still counts toward the 3-per-run limit
+    this.ui.bigBangError.textContent = "";
+    this._onCreditsChanged();        // refresh menu/profile balance displays
+    this._bigBangRevive();           // resume exactly where we died — no Game Over
+  }
+
+  /** Refresh every place a credit balance is shown (menu store chip, profile,
+      and the live Game Over button) after a purchase or consumption. */
+  _onCreditsChanged(){
+    this._updateStoreChip();
+    if (this.profilePanel?.isOpen?.()) this.profilePanel.refresh();
+    if (this.ui.gameover.style.display !== "none") this._updateBigBangButton();
+  }
+
+  /** Show the owned-credit count on the menu's Big Bang Store entry. */
+  _updateStoreChip(){
+    const chip = document.getElementById("storeBadge");
+    if (!chip) return;
+    const n = this.credits.available();
+    chip.textContent = n > 0 ? `💥 ${n}` : "";
+    chip.style.display = n > 0 ? "" : "none";
   }
 
   /** OPTION 1 — pay the escalating CRO price, then revive and continue. */

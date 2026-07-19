@@ -96,6 +96,27 @@ export const BIG_BANG_INVULN = 3.0;                   // seconds of invulnerabil
 // Cronos treasury that RECEIVES the CRO payment.
 export const BIG_BANG_RECIPIENT = "0x277B7CAD86D0f56Ae547533934dceA365ac7D7Bf";
 
+// --- Big Bang Packs (buy credits in advance, consume instantly, no wallet) ---
+// A "complete run" = 3 Big Bangs, so runs = credits / 3. Normal price = runs × 70
+// CRO (10+20+40 per run); packs are the discounted bulk price.
+export interface BigBangPack {
+  id: "star" | "asteroid" | "supernova";
+  emoji: string;
+  credits: number;   // Big Bangs granted
+  runs: number;      // complete runs covered (credits / 3)
+  priceCRO: number;  // discounted pack price
+  normalCRO: number; // à-la-carte equivalent
+  saveCRO: number;   // normalCRO - priceCRO
+  best?: boolean;    // highlighted as best value
+}
+export const BIG_BANG_PACKS: readonly BigBangPack[] = [
+  { id: "star",      emoji: "⭐",  credits: 9,  runs: 3,  priceCRO: 180,  normalCRO: 210,  saveCRO: 30 },
+  { id: "asteroid",  emoji: "☄️", credits: 30, runs: 10, priceCRO: 550,  normalCRO: 700,  saveCRO: 150 },
+  { id: "supernova", emoji: "🌌", credits: 90, runs: 30, priceCRO: 1500, normalCRO: 2100, saveCRO: 600, best: true },
+] as const;
+// localStorage key prefix for a wallet's credit balance + purchase history.
+export const BB_CREDITS_PREFIX = "super-novus:bbcredits:";
+
 // --- Prize payouts (owner-approved, sent from the treasury wallet) ---
 // Same treasury both receives Big Bang CRO and sends the weekly/monthly prizes.
 export const TREASURY_ADDRESS = BIG_BANG_RECIPIENT;
