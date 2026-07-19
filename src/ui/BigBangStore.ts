@@ -95,6 +95,10 @@ export class BigBangStore {
     try {
       // Connect on demand (explicit user action — no silent deep link).
       if (!this.wallet.getAddress()) await this.wallet.connect();
+      // A session paired before Cronos was required is scoped to another chain, so
+      // the wallet silently drops a Cronos transaction (no prompt appears). Force a
+      // one-time reconnect so the payment actually surfaces in the wallet.
+      if (!this.wallet.hasCronosSession()) { this.showReconnect(pack); return; }
       // Make sure we're on Cronos BEFORE paying. If we can't switch automatically,
       // show a Switch button + manual steps rather than a dead-end error.
       if (!(await this.wallet.ensureCronos())) { this.showSwitch(pack); return; }
@@ -140,6 +144,28 @@ export class BigBangStore {
       const ok = await this.wallet.ensureCronos();
       if (ok) { this.buy(pack.id); }                 // switched → retry the purchase
       else { btn.disabled = false; btn.textContent = t("store.switchBtn"); } // manual steps stay
+    });
+  }
+
+  /** The wallet session predates Cronos support (payments would be dropped with no
+      prompt). Offer a one-tap reconnect that pairs a fresh, Cronos-scoped session. */
+  private showReconnect(pack: BigBangPack): void {
+    this.busy = false;
+    this.el.querySelectorAll<HTMLButtonElement>(".bbsBuy").forEach((b) => (b.disabled = false));
+    const m = this.el.querySelector("#bbsMsg") as HTMLElement | null;
+    if (!m) return;
+    m.className = "bbsMsg";
+    m.innerHTML = `
+      <div class="bbsSwitch">
+        <div class="bbsSwitchTitle">⚠ ${t("store.reconnectTitle")}</div>
+        <button class="bbsSwitchBtn" id="bbsReconnectBtn">${t("store.reconnectBtn")}</button>
+        <div class="bbsSwitchManual">${t("store.reconnectMsg")}</div>
+      </div>`;
+    const btn = m.querySelector("#bbsReconnectBtn") as HTMLButtonElement;
+    btn.addEventListener("click", async () => {
+      btn.disabled = true; btn.textContent = t("store.switching");
+      try { await this.wallet.reconnect(); this.buy(pack.id); }   // fresh Cronos session → retry
+      catch { btn.disabled = false; btn.textContent = t("store.reconnectBtn"); }
     });
   }
 
