@@ -19,7 +19,7 @@ import { speedMult, density, spawnStep, speedAt } from "./progression";
 import { isInNovaZone } from "../fx/nova";
 import { UIManager } from "../ui/UIManager";
 import { DebugOverlay } from "../ui/DebugOverlay";
-import { WalletManager } from "../net/WalletManager";
+import { WalletManager, PayError } from "../net/WalletManager";
 import { Leaderboard } from "../net/Leaderboard";
 import { PrizePool } from "../net/PrizePool";
 import { Payouts } from "../net/Payouts";
@@ -673,6 +673,11 @@ export class GameEngine {
       const [w, m] = await Promise.all([this.leaderboard.myRank("weekly"), this.leaderboard.myRank("monthly")]);
       this.ui.setRank("weekly", w); this.ui.setRank("monthly", m);
       this._refreshBoards();
+      // Keep the profile in lock-step with the leaderboard the instant a score is
+      // saved — best score + ranks update with no reconnect / reload required.
+      this.profile.recordBest(r.score, r.dist, r.dust);
+      this._refreshIdentity();
+      this.profilePanel.refresh();
     } else {
       ss.textContent = "⚠ " + (this.leaderboard.lastSubmitReason || i18n.t("gameover.saveFailed")); ss.className = "no";
       btn.disabled = false; btn.textContent = i18n.t("gameover.saveBtn");
@@ -721,11 +726,12 @@ export class GameEngine {
     const btn = this.ui.bigBangBtn;
     const price = BIG_BANG_PRICES[this.bigBangs];
     btn.disabled = true;
+    this.ui.bigBangError.textContent = "";           // clear any previous error
     this.ui.bbLabel.textContent = i18n.t("bigbang.paying");
     this.ui.bbPrice.style.display = "none";
     try {
       const txHash = await this.wallet.payCRO(BIG_BANG_RECIPIENT, price);
-      this.bigBangs++;                 // count this revive
+      this.bigBangs++;                 // count this revive (per-run; reset on start())
       // Record the purchase so the live Monthly Prize Pool grows (30% community
       // bonus). Fire-and-forget + queued; never blocks the revive.
       const buyer = this.wallet.getAddress();
@@ -734,14 +740,20 @@ export class GameEngine {
           .then(() => this._refreshPrizePool())
           .catch((err) => console.warn("[BigBang] revenue record failed:", err));
       }
-      this._bigBangRevive();
+      this._bigBangRevive();           // resume exactly where we died — no Game Over
     } catch (e){
-      const msg = e instanceof Error ? e.message : String(e);
-      const rejected = /reject|denied|refus|cancel|annul|4001/i.test(msg);
-      this.ui.bbLabel.textContent = rejected ? i18n.t("bigbang.cancelled") : i18n.t("bigbang.failed");
-      this.ui.bbPrice.style.display = "none";
-      console.warn("[BigBang] payment failed:", msg);
-      setTimeout(() => this._updateBigBangButton(), 1800);
+      // Show the REAL reason (never a generic "payment failed") in a dedicated line.
+      const reason = e instanceof PayError ? e.reason : "failed";
+      const raw = e instanceof Error ? e.message : String(e ?? "");
+      const text =
+        reason === "rejected"   ? i18n.t("bigbang.errRejected")
+        : reason === "funds"    ? i18n.t("bigbang.errFunds", { price })
+        : reason === "wrong-chain" ? i18n.t("bigbang.errChain")
+        : reason === "no-wallet"   ? i18n.t("bigbang.errNoWallet")
+        : i18n.t("bigbang.errGeneric", { reason: raw.slice(0, 120) || "?" });
+      this.ui.bigBangError.textContent = text;
+      console.warn(`[BigBang] payment failed (${reason}):`, raw);
+      this._updateBigBangButton();     // reset button so the player can retry
     }
   }
 

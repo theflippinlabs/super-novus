@@ -117,20 +117,38 @@ export class ProfilePanel {
     this.el.innerHTML = this.shell(this.avatarSrc(null), cachedNick, addr, true);
     this.bindShell();
 
-    // Identity + lifetime stats are local (instant). Render immediately so the
+    // Identity + lifetime totals are local (instant). Render immediately so the
     // dashboard never waits on the network.
     const [row, stats] = await Promise.all([this.profile.get(), this.profile.stats()]);
     const nickname = this.nick(row);
     this.el.innerHTML = this.shell(this.avatarSrc(row), nickname, addr, false, { stats, row, currentRank: null });
     this.bindShell(row);
+    const localHigh = stats?.high_score ?? 0;
 
-    // Current rank is the only networked value — fill it in if/when it resolves;
-    // it stays "—" offline. (Best weekly/monthly ranks arrive with the backend.)
-    this.leaderboard.myRank("weekly").then((r) => {
-      const cell = this.el.querySelector("#pfCurRank");
-      if (cell && r !== null && r !== undefined) cell.textContent = `#${r}`;
-    }).catch(() => { /* offline → stays "—" */ });
+    // Best score + weekly/monthly ranks come from the LEADERBOARD — the single
+    // source of truth. This is what stops the profile and the board disagreeing
+    // (e.g. board #1 at 44,933 while the profile still shows 16,542). Runs after
+    // paint; stays local/"—" offline; also lifts the cached local best so it can
+    // never display below the server.
+    Promise.all([
+      this.leaderboard.myBest(),
+      this.leaderboard.myRank("weekly"),
+      this.leaderboard.myRank("monthly"),
+    ]).then(([best, wr, mr]) => {
+      if (best && best.score > 0) {
+        this.profile.recordBest(best.score, best.dist, best.dust);   // persist up
+        const hs = this.el.querySelector("#pfHighScore");
+        if (hs) hs.textContent = this.num(Math.max(best.score, localHigh));
+      }
+      const w = this.el.querySelector("#pfWeeklyRank");
+      if (w) w.textContent = wr !== null && wr !== undefined ? `#${wr}` : "—";
+      const m = this.el.querySelector("#pfMonthlyRank");
+      if (m) m.textContent = mr !== null && mr !== undefined ? `#${mr}` : "—";
+    }).catch(() => { /* offline → best stays local, ranks stay "—" */ });
   }
+
+  /** Re-render if the panel is open (e.g. right after a successful submission). */
+  async refresh(): Promise<void> { if (this.isOpen()) await this.render(); }
 
   private shell(
     avatar: string, nickname: string | null, addr: string, loading: boolean,
@@ -162,15 +180,16 @@ export class ProfilePanel {
         <div class="pfMetaRow"><span>${t("profile.wallet")}</span><b class="pfAddr">${esc(addr)}</b></div>
         <div class="pfMetaRow"><span>${t("profile.memberSince")}</span><b>${this.date(row?.created_at ?? null)}</b></div>
       </div>`;
+    void currentRank;
+    // Ranks come straight from the leaderboard (server) — hydrated in render().
     const ranks = `
       <div class="pfRanks">
-        <div class="pfRank"><div class="pfRankV" id="pfCurRank">${rk(currentRank)}</div><div class="pfRankL">${t("profile.currentRank")}</div></div>
-        <div class="pfRank"><div class="pfRankV">${rk(stats?.best_weekly_rank ?? null)}</div><div class="pfRankL">${t("profile.bestWeekly")}</div></div>
-        <div class="pfRank"><div class="pfRankV">${rk(stats?.best_monthly_rank ?? null)}</div><div class="pfRankL">${t("profile.bestMonthly")}</div></div>
+        <div class="pfRank"><div class="pfRankV" id="pfWeeklyRank">—</div><div class="pfRankL">${t("profile.rankWeekly")}</div></div>
+        <div class="pfRank"><div class="pfRankV" id="pfMonthlyRank">—</div><div class="pfRankL">${t("profile.rankMonthly")}</div></div>
       </div>`;
 
-    const tiles: Array<[string, string, string]> = [
-      ["⭐", t("stats.highScore"), this.num(stats?.high_score ?? 0)],
+    const tiles: Array<[string, string, string, string?]> = [
+      ["⭐", t("stats.highScore"), this.num(stats?.high_score ?? 0), "pfHighScore"],
       ["🌌", t("stats.totalDistance"), this.num(stats?.total_dist ?? 0) + " m"],
       ["✨", t("stats.totalDust"), this.num(stats?.total_dust ?? 0)],
       ["🎮", t("stats.games"), this.num(stats?.games ?? 0)],
@@ -181,8 +200,8 @@ export class ProfilePanel {
     ];
     const statsGrid = `
       <div class="pfSection"><h3 class="pfSecH">${t("stats.title")}</h3>
-        <div class="pfGrid">${tiles.map(([ic, l, v]) => `
-          <div class="pfTile"><div class="pfTileIc">${ic}</div><div class="pfTileV">${v}</div><div class="pfTileL">${l}</div></div>`).join("")}
+        <div class="pfGrid">${tiles.map(([ic, l, v, id]) => `
+          <div class="pfTile"><div class="pfTileIc">${ic}</div><div class="pfTileV"${id ? ` id="${id}"` : ""}>${v}</div><div class="pfTileL">${l}</div></div>`).join("")}
         </div></div>`;
 
     // Game history + reward history are intentionally out of scope for now

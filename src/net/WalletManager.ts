@@ -147,12 +147,13 @@ export class WalletManager {
     const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
     this.wc = (await EthereumProvider.init({
       projectId: this.projectId,
-      // Require only Ethereum mainnet (universally supported) so the
-      // connection itself never fails for wallets that don't have Cronos
-      // configured; Cronos is offered as an optional chain and we switch to
-      // it after connecting. Score signing works on any chain.
-      chains: [1],
-      optionalChains: [SUPPORTED_CHAIN_ID, 1, ...OPTIONAL_CHAIN_IDS] as unknown as [number, ...number[]],
+      // SUPER NOVUS is a Cronos game (Big Bang is paid in native CRO on Cronos),
+      // so require Cronos in the session — this guarantees eth_sendTransaction is
+      // approved for chain 25 and the CRO payment never fails on a chain mismatch.
+      // Ethereum mainnet stays optional for broad wallet support; score signing
+      // (personal_sign) works on any chain regardless.
+      chains: [SUPPORTED_CHAIN_ID],
+      optionalChains: [1, ...OPTIONAL_CHAIN_IDS] as unknown as [number, ...number[]],
       showQrModal: true,
       metadata: {
         name: "SUPER NOVUS",
@@ -247,22 +248,39 @@ export class WalletManager {
   }
 
   /** Send a native CRO payment on Cronos; returns the transaction hash.
-      Enforces the Cronos chain FIRST so value is never sent on another
-      network (where the native token would not be CRO). */
+      Enforces the Cronos chain FIRST so value is never sent on another network
+      (where the native token would not be CRO). Throws a PayError with a stable
+      `reason` code ("no-wallet" | "wrong-chain" | "rejected" | "funds" | "failed")
+      so the caller can show a precise, localized message instead of a generic one. */
   async payCRO(to: string, croAmount: number): Promise<string> {
-    if (!this.provider || !this.address) throw new Error("Wallet non connecté");
-    if (!/^0x[0-9a-fA-F]{40}$/.test(to)) throw new Error("Adresse de paiement invalide");
-    await this.switchToCronos(this.provider);
+    if (!this.provider || !this.address) throw new PayError("no-wallet", "Wallet non connecté");
+    if (!/^0x[0-9a-fA-F]{40}$/.test(to)) throw new PayError("failed", "Adresse de paiement invalide");
+    // Only switch if we're not already on Cronos — avoids an extra deep link that
+    // some mobile wallets treat as a second prompt.
     await this.refreshChain();
+    if (this.chainId !== SUPPORTED_CHAIN_ID) {
+      await this.switchToCronos(this.provider);
+      await this.refreshChain();
+    }
     if (this.chainId !== SUPPORTED_CHAIN_ID)
-      throw new Error("Passe sur le réseau Cronos (Chain 25) pour payer en CRO");
+      throw new PayError("wrong-chain", "Réseau Cronos requis");
     const valueWei = BigInt(Math.trunc(croAmount)) * (10n ** 18n);
     const valueHex = "0x" + valueWei.toString(16);
-    const hash = await this.provider.request({
-      method: "eth_sendTransaction",
-      params: [{ from: this.address, to, value: valueHex }],
-    });
-    return String(hash);
+    try {
+      const hash = await this.provider.request({
+        method: "eth_sendTransaction",
+        params: [{ from: this.address, to, value: valueHex }],
+      });
+      return String(hash);
+    } catch (e) {
+      const code = (e as { code?: number })?.code;
+      const msg = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
+      if (code === 4001 || /reject|denied|refus|cancel|annul|user rejected/.test(msg))
+        throw new PayError("rejected", "Transaction refusée");
+      if (/insufficient funds|insufficient balance|not enough|exceeds balance/.test(msg))
+        throw new PayError("funds", "Solde CRO insuffisant");
+      throw new PayError("failed", e instanceof Error ? e.message : String(e ?? "erreur"));
+    }
   }
 
   async disconnect(): Promise<void> {
@@ -281,4 +299,10 @@ export class WalletManager {
 
 export function shortAddr(a: string): string {
   return a.length > 10 ? `${a.slice(0, 6)}…${a.slice(-4)}` : a;
+}
+
+/** Payment failure with a stable machine-readable reason so the UI can localize. */
+export type PayReason = "no-wallet" | "wrong-chain" | "rejected" | "funds" | "failed";
+export class PayError extends Error {
+  constructor(public reason: PayReason, message: string) { super(message); this.name = "PayError"; }
 }

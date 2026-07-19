@@ -283,6 +283,25 @@ export class Leaderboard {
     return { ok: false, status, reason: `status ${status ?? "?"} : ${extractErr(detail) || error.message}` };
   }
 
+  /** The connected wallet's BEST server-side entry across the current weekly +
+      monthly periods — the leaderboard is the single source of truth for the
+      player's best score/dist/dust, so the profile and board can never disagree.
+      Returns null when offline / not connected / no entry yet. */
+  async myBest(): Promise<{ score: number; dist: number; dust: number } | null> {
+    const addr = this.wallet.getAddress();
+    if (!this.client || !addr) return null;
+    const { data, error } = await this.client
+      .from("sn_leaderboard")
+      .select("best_score,best_dist,best_dust")
+      .eq("wallet", addr)
+      .order("best_score", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    if (error) { console.error(`${LOG} myBest query failed:`, error); return null; }
+    if (!data) return null;
+    return { score: data.best_score ?? 0, dist: data.best_dist ?? 0, dust: data.best_dust ?? 0 };
+  }
+
   /** Connected wallet's rank in a period (1-based), or null if unavailable
       (not connected / not on the board / offline). */
   async myRank(period: LeaderboardPeriod): Promise<number | null> {

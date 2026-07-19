@@ -50,6 +50,7 @@ export class UIManager {
   bbLabel = $("bbLabel");
   bbPrice = $("bbPrice");
   bigBangCount = $("bigBangCount");
+  bigBangError = $("bigBangError");
   menuBtn = $("menuBtn") as HTMLButtonElement;
   newRecordBadge = $("newRecordBadge");
   weeklyRank = $("weeklyRank");
