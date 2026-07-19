@@ -206,6 +206,29 @@ export class WalletManager {
     return this.chainId === SUPPORTED_CHAIN_ID;
   }
 
+  /** True if the active WalletConnect session actually includes Cronos (eip155:25).
+      A session paired BEFORE Cronos was required is scoped to another chain, so a
+      Cronos `eth_sendTransaction` is silently dropped by the wallet (no prompt).
+      Returns true for injected wallets (not applicable) and, defensively, when the
+      session can't be inspected — so we never force a needless reconnect. */
+  hasCronosSession(): boolean {
+    if (!this.wc || this.provider !== this.wc) return true; // injected / n.a.
+    try {
+      const s = (this.wc as unknown as { session?: { namespaces?: Record<string, { chains?: string[]; accounts?: string[] }> } }).session;
+      const eip = s?.namespaces?.eip155;
+      if (!eip) return false;
+      const hit = (arr?: string[]) => Array.isArray(arr) && arr.some((x) => x === "eip155:25" || x.startsWith("eip155:25:"));
+      return hit(eip.chains) || hit(eip.accounts);
+    } catch { return true; }
+  }
+
+  /** Tear down the current session and pair a fresh one (which is Cronos-scoped).
+      Used when the restored session predates Cronos support so payments surface. */
+  async reconnect(): Promise<string> {
+    try { await this.disconnect(); } catch { /* ignore */ }
+    return this.connect();
+  }
+
   /** Read the active chain. Prefers the WalletConnect session's own chainId — a
       reliable local value — because an eth_chainId round-trip is NOT answered by
       every mobile wallet over the WC relay and would otherwise wipe a known-good
