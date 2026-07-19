@@ -175,8 +175,8 @@ export class WalletManager {
     return false;
   }
 
-  /** Ask an injected wallet to switch to Cronos, adding it if unknown.
-      Never throws upward: signing works regardless of the active chain. */
+  /** Ask the wallet to switch to Cronos, adding it if unknown. Never throws
+      upward: signing works regardless of the active chain. */
   private async switchToCronos(p: Eip1193): Promise<void> {
     try {
       await p.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CRONOS_PARAMS.chainId }] });
@@ -193,11 +193,32 @@ export class WalletManager {
     }
   }
 
+  /** Ensure the active chain is Cronos. No-op if already there; otherwise requests
+      a switch (adding the chain if unknown). Returns true if on Cronos afterwards.
+      Safe to call before any Cronos transaction. */
+  async ensureCronos(): Promise<boolean> {
+    await this.refreshChain();
+    if (this.chainId === SUPPORTED_CHAIN_ID) return true;
+    if (this.provider) {
+      await this.switchToCronos(this.provider);
+      await this.refreshChain();
+    }
+    return this.chainId === SUPPORTED_CHAIN_ID;
+  }
+
+  /** Read the active chain. Prefers the WalletConnect session's own chainId — a
+      reliable local value — because an eth_chainId round-trip is NOT answered by
+      every mobile wallet over the WC relay and would otherwise wipe a known-good
+      chain. Falls back to eth_chainId for injected wallets. Never nulls a known
+      chain on a failed request (keeps the last value from connect / chainChanged). */
   private async refreshChain(): Promise<void> {
+    const wcChain = this.wc && this.provider === this.wc ? this.wc.chainId : undefined;
+    if (typeof wcChain === "number" && wcChain > 0) { this.chainId = wcChain; return; }
     try {
-      const hex = (await this.provider!.request({ method: "eth_chainId" })) as string;
-      this.chainId = parseInt(hex, 16);
-    } catch { this.chainId = null; }
+      const raw = await this.provider!.request({ method: "eth_chainId" });
+      const n = typeof raw === "string" ? parseInt(raw, 16) : Number(raw);
+      if (Number.isFinite(n) && n > 0) this.chainId = n;
+    } catch { /* keep the last known chainId — do NOT null it out */ }
   }
 
   private watch(p: Eip1193): void {
@@ -255,14 +276,7 @@ export class WalletManager {
   async payCRO(to: string, croAmount: number): Promise<string> {
     if (!this.provider || !this.address) throw new PayError("no-wallet", "Wallet non connecté");
     if (!/^0x[0-9a-fA-F]{40}$/.test(to)) throw new PayError("failed", "Adresse de paiement invalide");
-    // Only switch if we're not already on Cronos — avoids an extra deep link that
-    // some mobile wallets treat as a second prompt.
-    await this.refreshChain();
-    if (this.chainId !== SUPPORTED_CHAIN_ID) {
-      await this.switchToCronos(this.provider);
-      await this.refreshChain();
-    }
-    if (this.chainId !== SUPPORTED_CHAIN_ID)
+    if (!(await this.ensureCronos()))
       throw new PayError("wrong-chain", "Réseau Cronos requis");
     const valueWei = BigInt(Math.trunc(croAmount)) * (10n ** 18n);
     const valueHex = "0x" + valueWei.toString(16);
