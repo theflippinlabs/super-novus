@@ -122,12 +122,67 @@
     text-shadow:0 0 16px rgba(245,197,66,.9);margin:6px 0 8px;animation:pulse 1.4s ease-in-out infinite}
   .rankLine{display:none;font-size:12px;letter-spacing:2px;color:#c8cfe8;margin:3px 0;font-variant-numeric:tabular-nums}
   .rankLine b{color:var(--gold);font-weight:800}
-  button.big.bigbang{margin-top:8px;color:#fff;
-    background:linear-gradient(180deg,#c3a0ff,#7a4fe0 55%,#472aa0);
-    box-shadow:0 0 34px rgba(140,90,255,.6), 0 4px 0 rgba(50,20,110,.6);font-size:14px;letter-spacing:3px}
-  button.big.bigbang:disabled{opacity:.5;filter:grayscale(.35);cursor:default}
-  #bigBangCount{font-size:9.5px;letter-spacing:3px;color:#9a86c8;font-weight:700;margin-top:6px}
-  #menuBtn{margin-top:14px}
+  /* Compact Game-Over stat row (frees vertical room for the Big Bang hero) */
+  .goStatRow{display:flex;justify-content:center;gap:26px;margin:8px 0 6px}
+  .goStat{display:flex;flex-direction:column;align-items:center;gap:1px}
+  .goStat b{font-size:22px;font-weight:800;color:#fff;font-variant-numeric:tabular-nums;letter-spacing:.5px;
+    text-shadow:0 0 14px rgba(150,180,255,.4)}
+  .goStat span{font-size:8px;letter-spacing:2px;color:var(--dim);font-weight:700}
+  .goStat.gold b{color:var(--gold);text-shadow:0 0 14px rgba(245,197,66,.5)}
+
+  /* ===== BIG BANG hero — activate a superpower, not "buy" something ===== */
+  #bigBangCard{position:relative;width:min(90vw,340px);margin:14px 0 12px;padding:15px 16px 13px;
+    border-radius:20px;overflow:hidden;text-align:center;
+    background:
+      radial-gradient(130% 90% at 50% 0%, rgba(150,90,255,.30), transparent 62%),
+      linear-gradient(180deg, rgba(46,26,96,.55), rgba(18,12,44,.62));
+    border:1px solid rgba(165,125,255,.42);
+    box-shadow:0 0 30px rgba(140,90,255,.34), inset 0 1px 0 rgba(255,255,255,.1);
+    animation:bbCardGlow 3.6s ease-in-out infinite}
+  @keyframes bbCardGlow{0%,100%{box-shadow:0 0 24px rgba(140,90,255,.28), inset 0 1px 0 rgba(255,255,255,.1)}
+    50%{box-shadow:0 0 42px rgba(165,115,255,.52), inset 0 1px 0 rgba(255,255,255,.13)}}
+  /* rising energy particles */
+  .bbParticles{position:absolute;inset:0;pointer-events:none;overflow:hidden;z-index:0}
+  .bbParticles i{position:absolute;bottom:-6px;width:3px;height:3px;border-radius:50%;background:#cbb8ff;opacity:0;
+    box-shadow:0 0 6px rgba(185,150,255,.9);animation:bbFloat 5s linear infinite}
+  .bbParticles i:nth-child(1){left:14%;animation-delay:0s;animation-duration:4.6s}
+  .bbParticles i:nth-child(2){left:30%;animation-delay:1.5s;animation-duration:5.4s}
+  .bbParticles i:nth-child(3){left:46%;animation-delay:.7s;animation-duration:4.2s}
+  .bbParticles i:nth-child(4){left:62%;animation-delay:2.3s;animation-duration:5.8s}
+  .bbParticles i:nth-child(5){left:78%;animation-delay:1.1s;animation-duration:4.9s}
+  .bbParticles i:nth-child(6){left:88%;animation-delay:3s;animation-duration:5.2s}
+  @keyframes bbFloat{0%{transform:translateY(0) scale(.5);opacity:0}
+    16%{opacity:.9}100%{transform:translateY(-130px) scale(1);opacity:0}}
+  #bigBangCard > *:not(.bbParticles){position:relative;z-index:1}
+  .bbBadge{display:inline-flex;align-items:center;gap:5px;font-size:9px;letter-spacing:1.2px;font-weight:800;
+    color:#ffd7a0;background:rgba(255,120,40,.15);border:1px solid rgba(255,150,60,.42);border-radius:20px;
+    padding:5px 11px;margin-bottom:9px;text-transform:uppercase}
+  .bbHeadline{font-size:13.5px;font-weight:800;line-height:1.35;color:#fff;margin:0 auto 12px;letter-spacing:.2px;max-width:275px}
+  .bbBtn{position:relative;width:100%;pointer-events:auto;font-family:inherit;cursor:pointer;
+    display:flex;align-items:center;justify-content:center;gap:11px;
+    padding:19px 16px;border:none;border-radius:15px;color:#fff;font-weight:800;font-size:15.5px;letter-spacing:1.2px;
+    text-transform:uppercase;overflow:hidden;
+    background:linear-gradient(180deg,#cba6ff 0%,#7d4fe6 52%,#4a2aa8 100%);
+    box-shadow:0 0 30px rgba(150,90,255,.55), 0 6px 18px rgba(50,24,110,.5), inset 0 1px 0 rgba(255,255,255,.35);
+    animation:bbPulse 1.9s ease-in-out infinite}
+  @keyframes bbPulse{0%,100%{transform:scale(1);box-shadow:0 0 26px rgba(150,90,255,.5), 0 6px 18px rgba(50,24,110,.5), inset 0 1px 0 rgba(255,255,255,.35)}
+    50%{transform:scale(1.025);box-shadow:0 0 48px rgba(175,120,255,.8), 0 8px 22px rgba(60,28,130,.55), inset 0 1px 0 rgba(255,255,255,.4)}}
+  .bbBtn::after{content:"";position:absolute;top:-60%;left:-30%;width:50%;height:220%;transform:rotate(18deg);
+    background:linear-gradient(90deg,transparent,rgba(255,255,255,.28),transparent);animation:bbSheen 3.4s ease-in-out infinite}
+  @keyframes bbSheen{0%,100%{left:-40%}55%{left:120%}}
+  .bbBtn:active{transform:scale(.98)}
+  .bbBtn:disabled{animation:none;opacity:.62;filter:grayscale(.3);cursor:default}
+  .bbBtn:disabled::after{display:none}
+  .bbLabel{position:relative;z-index:1}
+  .bbPrice{position:relative;z-index:1;font-size:12.5px;font-weight:800;letter-spacing:.4px;color:#3a2600;white-space:nowrap;
+    background:linear-gradient(180deg,#FFF0BE,#F0B429);border-radius:20px;padding:5px 11px;
+    box-shadow:0 2px 8px rgba(240,180,40,.5), inset 0 1px 0 rgba(255,255,255,.55)}
+  .bbBenefits{display:flex;flex-direction:column;gap:4px;margin:11px auto 0;width:fit-content;text-align:left}
+  .bbBenefits span{font-size:11px;color:#dccdff;letter-spacing:.2px;font-weight:600}
+  .bbBenefits span::before{content:"✓";color:#8dffbe;font-weight:800;margin-right:7px}
+  #bigBangCount{font-size:9px;letter-spacing:2.5px;color:#a48fd0;font-weight:700;margin-top:10px}
+  @media (prefers-reduced-motion: reduce){#bigBangCard,.bbBtn,.bbBtn::after,.bbParticles i{animation:none}}
+  #menuBtn{margin-top:12px}
   .pulse{animation:pulse 2.6s ease-in-out infinite}
   @keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
   @media (prefers-reduced-motion: reduce){.pulse{animation:none}}
@@ -414,21 +469,41 @@
 </div>
 
 <div class="screen" id="gameover">
+  <!-- 1) Game Over information (compact) -->
   <div class="brand">N O V A R Y S</div>
   <h1 data-i18n="gameover.title">EXTINCTION</h1>
   <div class="sunline"></div>
   <div id="newRecordBadge" data-i18n="gameover.newRecord">✦ NOUVEAU RECORD ✦</div>
-  <div class="statLine"><span data-i18n="gameover.score">SCORE</span> <b id="finalScore">0</b></div>
-  <div class="statLine"><span data-i18n="gameover.distance">DISTANCE</span> <b id="finalDist">0</b></div>
-  <div class="statLine gold"><span data-i18n="gameover.dust">POUSSIÈRE</span> ★ <b id="finalDust">0</b></div>
+  <div class="goStatRow">
+    <div class="goStat"><b id="finalScore">0</b><span data-i18n="gameover.score">SCORE</span></div>
+    <div class="goStat"><b id="finalDist">0</b><span data-i18n="gameover.distance">DISTANCE</span></div>
+    <div class="goStat gold"><b id="finalDust">0</b><span>★ <span data-i18n="gameover.dust">POUSSIÈRE</span></span></div>
+  </div>
   <div class="rankLine" id="weeklyRank"></div>
   <div class="rankLine" id="monthlyRank"></div>
   <div id="bestScore"></div>
   <div id="seedLine"></div>
+
+  <!-- 2) BIG BANG — the hero: continue your legendary run -->
+  <div id="bigBangCard" class="bbCard">
+    <div class="bbParticles" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i></div>
+    <div class="bbBadge">🔥 <span data-i18n="bigbang.urgency">Seulement 3 Big Bangs par partie</span></div>
+    <div class="bbHeadline">💥 <span data-i18n="bigbang.headline">Reprends ta course là où tu es mort.</span></div>
+    <button class="bbBtn" id="bigBangBtn">
+      <span class="bbLabel" id="bbLabel" data-i18n="bigbang.continue">CONTINUER LA COURSE</span>
+      <span class="bbPrice" id="bbPrice">10 CRO</span>
+    </button>
+    <div class="bbBenefits">
+      <span data-i18n="bigbang.benefit1">Garde ton score actuel</span>
+      <span data-i18n="bigbang.benefit2">Garde ta progression</span>
+      <span data-i18n="bigbang.benefit3">Reste dans la course au classement</span>
+    </div>
+    <div id="bigBangCount"></div>
+  </div>
+
+  <!-- 3) Save Score  4) Back to Menu -->
   <div id="saveState" class="no"></div>
   <button class="mini save" id="saveScoreBtn" data-i18n="gameover.saveBtn" style="display:none">ENREGISTRER LE SCORE</button>
-  <button class="big bigbang" id="bigBangBtn">🌌 BIG BANG #1 — 10 CRO</button>
-  <div id="bigBangCount"></div>
   <button class="mini" id="menuBtn" data-i18n="gameover.menu">RETOUR AU MENU</button>
 </div>
 

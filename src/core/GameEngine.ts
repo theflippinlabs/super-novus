@@ -681,24 +681,35 @@ export class GameEngine {
 
   /** Reflect Big Bang state: dynamic price per revive (#1/#2/#3), usage count,
       and the permanent "max reached" state after the 3rd. */
+  /** Render the Big Bang hero button: an action label + a gold CRO price badge.
+      The price badge only shows when a purchase is actually possible/priced. */
   _updateBigBangButton(){
     const btn = this.ui.bigBangBtn;
+    const setLabel = (text: string, showPrice: boolean, price?: number) => {
+      this.ui.bbLabel.textContent = text;
+      if (showPrice && price !== undefined){
+        this.ui.bbPrice.textContent = `${price} CRO`;
+        this.ui.bbPrice.style.display = "";
+      } else {
+        this.ui.bbPrice.style.display = "none";
+      }
+    };
     this.ui.setBigBangCount(this.bigBangs, BIG_BANG_MAX);
     if (this.bigBangs >= BIG_BANG_MAX){
-      btn.textContent = i18n.t("bigbang.max");
+      setLabel(i18n.t("bigbang.max"), false);
       btn.disabled = true;
       return;
     }
     const n = this.bigBangs + 1;                 // this purchase would be #n
     const price = BIG_BANG_PRICES[this.bigBangs]; // 10 / 20 / 40
     if (!BIG_BANG_RECIPIENT){
-      btn.textContent = i18n.t("bigbang.soon", { n });
+      setLabel(i18n.t("bigbang.soon", { n }), false);
       btn.disabled = true;
     } else if (!this.wallet.getAddress()){
-      btn.textContent = i18n.t("bigbang.connect", { n, price });
+      setLabel(i18n.t("bigbang.connectShort"), true, price);
       btn.disabled = true;
     } else {
-      btn.textContent = i18n.t("bigbang.buy", { n, price });
+      setLabel(i18n.t("bigbang.continue"), true, price);
       btn.disabled = false;
     }
   }
@@ -710,7 +721,8 @@ export class GameEngine {
     const btn = this.ui.bigBangBtn;
     const price = BIG_BANG_PRICES[this.bigBangs];
     btn.disabled = true;
-    btn.textContent = i18n.t("bigbang.paying");
+    this.ui.bbLabel.textContent = i18n.t("bigbang.paying");
+    this.ui.bbPrice.style.display = "none";
     try {
       const txHash = await this.wallet.payCRO(BIG_BANG_RECIPIENT, price);
       this.bigBangs++;                 // count this revive
@@ -726,7 +738,8 @@ export class GameEngine {
     } catch (e){
       const msg = e instanceof Error ? e.message : String(e);
       const rejected = /reject|denied|refus|cancel|annul|4001/i.test(msg);
-      btn.textContent = rejected ? i18n.t("bigbang.cancelled") : i18n.t("bigbang.failed");
+      this.ui.bbLabel.textContent = rejected ? i18n.t("bigbang.cancelled") : i18n.t("bigbang.failed");
+      this.ui.bbPrice.style.display = "none";
       console.warn("[BigBang] payment failed:", msg);
       setTimeout(() => this._updateBigBangButton(), 1800);
     }
