@@ -53,15 +53,20 @@ export class UIManager {
   weeklyRank = $("weeklyRank");
   monthlyRank = $("monthlyRank");
   profileIcon = $("profileIcon") as HTMLButtonElement;
+  profileAv = $("profileAv");
   menuMusicBtn = $("menuMusicBtn") as HTMLButtonElement;
   private _tt: ReturnType<typeof setTimeout> | undefined;
 
   /** Active locale as a BCP-47 tag for number/date formatting. */
   private locale(): string { return BCP47[i18n.get()] ?? "en-US"; }
 
-  /** Highlight the active language chip. */
+  /** Reflect the active language: the flag shown on the header pill + the active
+      option in the popover chooser. */
   setLangActive(lang: Lang): void {
-    for (const b of document.querySelectorAll<HTMLElement>(".langBtn"))
+    const flags: Record<string, string> = { fr: "🇫🇷", en: "🇬🇧", ko: "🇰🇷" };
+    const flag = document.getElementById("langFlag");
+    if (flag) flag.textContent = flags[lang] ?? "🌍";
+    for (const b of document.querySelectorAll<HTMLElement>(".langOpt"))
       b.classList.toggle("active", b.dataset.lang === lang);
   }
 
@@ -77,15 +82,16 @@ export class UIManager {
       in a soft ring, signalling "sign in / your profile". The nickname/address
       never appear here — identity is avatar-only in the header. */
   setProfileIdentity(connected: boolean, wallet: string | null, customAvatar: string | null, _nickname: string | null): void {
+    const av = this.profileAv;
     if (connected && wallet) {
       const avatar = customAvatar || generateAvatar(wallet, 64);
-      this.profileIcon.style.backgroundImage = `url("${avatar}")`;
-      this.profileIcon.classList.add("hasAvatar");
-      this.profileIcon.classList.remove("guest");
+      av.style.backgroundImage = `url("${avatar}")`;
+      av.classList.add("hasAvatar");
+      av.classList.remove("guest");
     } else {
-      this.profileIcon.style.backgroundImage = `url("${silhouetteDataUri()}")`;
-      this.profileIcon.classList.remove("hasAvatar");
-      this.profileIcon.classList.add("guest");
+      av.style.backgroundImage = `url("${silhouetteDataUri()}")`;
+      av.classList.remove("hasAvatar");
+      av.classList.add("guest");
     }
   }
 
