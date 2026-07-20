@@ -16,7 +16,7 @@ export class Player {
   private g1: THREE.Sprite;
   private g2: THREE.Sprite;
   private g3: THREE.Sprite;
-  private flare: THREE.Sprite;
+  private orbiters: Array<{ s: THREE.Sprite; rad: number; sp: number; ph: number; inc: number; tw: number }> = [];
   private light: THREE.PointLight;
 
   constructor(scene: THREE.Scene) {
@@ -78,31 +78,32 @@ export class Player {
     this.group.add(this.core);
 
     // Layered additive glow — inner white-cyan, a mid blue halo, and a large faint
-    // volumetric outer bloom. Kept moderate so nearby obstacles stay readable.
-    this.g1 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0xbfe0ff, transparent: true, opacity: .34, depthWrite: false, blending: THREE.AdditiveBlending }));
-    this.g1.scale.setScalar(5.5);
-    this.g2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0x4a9cff, transparent: true, opacity: .8, depthWrite: false, blending: THREE.AdditiveBlending }));
-    this.g2.scale.setScalar(15);
-    this.g3 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0x2a66ff, transparent: true, opacity: .3, depthWrite: false, blending: THREE.AdditiveBlending }));
-    this.g3.scale.setScalar(26);
+    // volumetric outer bloom. Toned down ~30% so the plasma shader detail reads
+    // clearly instead of blowing out to white. No cross/lens-flare — just a soft
+    // living-star halo.
+    this.g1 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0xbfe0ff, transparent: true, opacity: .24, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.g1.scale.setScalar(5.2);
+    this.g2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0x4a9cff, transparent: true, opacity: .55, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.g2.scale.setScalar(13.5);
+    this.g3 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0x2a66ff, transparent: true, opacity: .2, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.g3.scale.setScalar(23);
     this.group.add(this.g3, this.g1, this.g2);
 
-    // Warmer, dimmer, smaller lens flare (was bright white and oversized).
-    this.flare = new THREE.Sprite(new THREE.SpriteMaterial({
-      map: canvasTex(128, 128, (ctx) => {
-        ctx.strokeStyle = "rgba(150,205,255,.7)";
-        for (const [w, l] of [[2.4, 62], [1.2, 40]]) {
-          ctx.lineWidth = w;
-          ctx.beginPath();
-          ctx.moveTo(64 - l, 64); ctx.lineTo(64 + l, 64);
-          ctx.moveTo(64, 64 - l); ctx.lineTo(64, 64 + l);
-          ctx.stroke();
-        }
-      }),
-      transparent: true, opacity: .22, depthWrite: false, blending: THREE.AdditiveBlending,
-    }));
-    this.flare.scale.setScalar(8);
-    this.group.add(this.flare);
+    // Small energy particles orbiting the core — the star feels alive without any
+    // artificial rays. Each is a tiny additive spark on its own tilted orbit.
+    const spark = canvasTex(64, 64, (ctx) => {
+      const g = ctx.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, "rgba(230,245,255,1)");
+      g.addColorStop(0.35, "rgba(150,205,255,0.6)");
+      g.addColorStop(1, "rgba(150,205,255,0)");
+      ctx.fillStyle = g; ctx.fillRect(0, 0, 64, 64);
+    });
+    for (let i = 0; i < 6; i++) {
+      const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: spark, color: i % 2 ? 0xbfe6ff : 0x88c4ff, transparent: true, opacity: .9, depthWrite: false, blending: THREE.AdditiveBlending }));
+      s.scale.setScalar(0.7 + (i % 3) * 0.18);
+      this.group.add(s);
+      this.orbiters.push({ s, rad: 1.7 + (i % 3) * 0.35, sp: (i % 2 ? 1 : -1) * (1.4 + i * 0.28), ph: (i / 6) * Math.PI * 2, inc: (i * 0.7), tw: 4 + i });
+    }
 
     // Wider reach so more nearby asteroids catch the travelling player light.
     this.light = new THREE.PointLight(0x6aa8ff, PLAYER_LIGHT_INTENSITY, 132, 1.6);
@@ -119,20 +120,27 @@ export class Player {
   /** STAR ENERGY full: brighten without touching the core shader. */
   setCharged(charged: boolean): void {
     this.light.intensity = charged ? PLAYER_LIGHT_INTENSITY_CHARGED : PLAYER_LIGHT_INTENSITY;
-    this.g2.material.opacity = charged ? 1.0 : 0.8;
-    this.g3.material.opacity = charged ? 0.42 : 0.3;
+    this.g2.material.opacity = charged ? 0.72 : 0.55;
+    this.g3.material.opacity = charged ? 0.3 : 0.2;
   }
 
   update(dt: number, t: number): void {
     this.coreMat.uniforms.uTime.value = t;
     this.core.rotation.y += dt * 0.6;
     this.core.rotation.x += dt * 0.25;
-    // Subtle energy breathing — the core and glows pulse gently in sync.
+    // Subtle energy breathing — the core and glows pulse gently in sync (toned down).
     this.core.scale.setScalar(1 + Math.sin(t * 3.4) * 0.03);
-    this.g1.material.opacity = 0.34 + Math.sin(t * 7) * 0.06;
-    this.g2.scale.setScalar(15 + Math.sin(t * 4.3) * 2.2);
-    this.g3.scale.setScalar(26 + Math.sin(t * 2.1) * 2.6);
-    this.flare.material.rotation += dt * 0.3;
+    this.g1.material.opacity = 0.24 + Math.sin(t * 7) * 0.05;
+    this.g2.scale.setScalar(13.5 + Math.sin(t * 4.3) * 1.9);
+    this.g3.scale.setScalar(23 + Math.sin(t * 2.1) * 2.2);
+    // Energy particles orbiting the core on tilted rings, twinkling as they go.
+    for (const o of this.orbiters) {
+      const a = t * o.sp + o.ph;
+      const x = Math.cos(a) * o.rad;
+      const z = Math.sin(a) * o.rad;
+      o.s.position.set(x, Math.sin(a * 1.3 + o.inc) * o.rad * 0.35, z);
+      o.s.material.opacity = 0.55 + 0.4 * (0.5 + 0.5 * Math.sin(t * o.tw + o.ph));
+    }
     if (this.invuln > 0) {
       this.invuln -= dt;
       const blink = Math.sin(t * 24) > 0;
