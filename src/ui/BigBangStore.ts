@@ -5,6 +5,7 @@
    are instant with no wallet. Fails soft with a precise, localized reason. */
 import { WalletManager, PayError } from "../net/WalletManager";
 import { BigBangCredits } from "../net/BigBangCredits";
+import { verifyPayment, isTxUsed, markTxUsed } from "../net/CronosPay";
 import { BIG_BANG_PACKS, BIG_BANG_RECIPIENT, type BigBangPack } from "../config";
 import { i18n, t } from "../i18n";
 
@@ -268,10 +269,14 @@ export class BigBangStore {
       <div class="bbsSwitch">
         <div class="bbsSwitchTitle">⚠ ${t("store.noCronosTitle")}</div>
         <div class="bbsSwitchManual">${t("store.noCronosMsg")}</div>
-        <button class="bbsSwitchBtn" id="bbsCopyLink">${t("store.copyLink")}</button>
-        <div class="bbsSwitchManual" style="opacity:.85">${link.replace(/^https?:\/\//, "")}</div>
+        ${pack ? `<button class="bbsSwitchBtn" id="bbsPayDirect">${t("store.payDirect")}</button>` : ""}
+        <div class="bbsPayOr">${t("store.payOr")}</div>
+        <button class="bbsReconnectLink" id="bbsCopyLink">${t("store.copyLink")}</button>
+        <div class="bbsSwitchManual" style="opacity:.7">${link.replace(/^https?:\/\//, "")}</div>
         ${pack ? `<button class="bbsReconnectLink" id="bbsReconnectBtn">${t("store.reconnectBtn")}</button>` : ""}
       </div>`;
+    const pay = m.querySelector("#bbsPayDirect") as HTMLButtonElement | null;
+    if (pay && pack) pay.addEventListener("click", () => this.showManualPay(pack));
     const copy = m.querySelector("#bbsCopyLink") as HTMLButtonElement;
     copy.addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(link); copy.textContent = t("store.copied"); }
@@ -279,6 +284,73 @@ export class BigBangStore {
     });
     const re = m.querySelector("#bbsReconnectBtn") as HTMLButtonElement | null;
     if (re && pack) re.addEventListener("click", () => this.attemptReconnect(pack, re));
+  }
+
+  /** Wallet-agnostic payment: the player sends CRO to the treasury from ANY wallet
+      (a normal transfer — no WalletConnect), pastes the transaction hash, and we
+      confirm it on-chain via public Cronos RPC, then credit the Big Bangs. This is
+      the reliable path when a wallet won't route Cronos over WalletConnect. */
+  private showManualPay(pack: BigBangPack): void {
+    this.busy = false;
+    const m = this.el.querySelector("#bbsMsg") as HTMLElement | null;
+    if (!m) return;
+    const addr = BIG_BANG_RECIPIENT;
+    m.className = "bbsMsg";
+    m.innerHTML = `
+      <div class="bbsPay">
+        <div class="bbsSwitchTitle">${t("store.payDirectTitle")}</div>
+        <div class="bbsPayStep">${t("store.payStep1", { n: this.cro(pack.priceCRO) })}</div>
+        <div class="bbsPayAddr" id="bbsPayAddr">${addr}</div>
+        <button class="bbsSwitchBtn" id="bbsPayCopyAddr">${t("store.payCopyAddr")}</button>
+        <div class="bbsPayStep">${t("store.payStep2")}</div>
+        <input class="bbsPayInput" id="bbsPayHash" inputmode="text" autocomplete="off"
+               autocapitalize="off" spellcheck="false" placeholder="${t("store.payHashPlaceholder")}" />
+        <button class="bbsConfirmBtn" id="bbsPayVerify">${t("store.payVerify")}</button>
+        <div class="bbsPayMsg" id="bbsPayMsg"></div>
+        <button class="bbsReconnectLink" id="bbsPayBack">${t("common.cancel")}</button>
+      </div>`;
+    try { m.scrollIntoView({ block: "center", behavior: "smooth" }); } catch { /* ignore */ }
+
+    const copyAddr = m.querySelector("#bbsPayCopyAddr") as HTMLButtonElement;
+    copyAddr.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(addr); copyAddr.textContent = t("store.payAddrCopied"); }
+      catch { /* selection fallback not reliable on iOS — address is visible above */ }
+    });
+    (m.querySelector("#bbsPayBack") as HTMLButtonElement).addEventListener("click", () => this.showBrowserHint(pack));
+
+    const input = m.querySelector("#bbsPayHash") as HTMLInputElement;
+    const verify = m.querySelector("#bbsPayVerify") as HTMLButtonElement;
+    const payMsg = m.querySelector("#bbsPayMsg") as HTMLElement;
+    const setMsg = (text: string, ok = false) => { payMsg.textContent = text; payMsg.className = `bbsPayMsg ${ok ? "ok" : "err"}`; };
+
+    verify.addEventListener("click", async () => {
+      const hash = input.value.trim();
+      if (isTxUsed(hash)) { setMsg(t("store.payErrUsed")); return; }
+      verify.disabled = true; verify.textContent = t("store.payVerifying");
+      this.resetLog();
+      this.logStep(`▶ verify payment ${pack.id} — ${pack.priceCRO} CRO`);
+      this.logStep(`· hash ${hash.slice(0, 12)}…`);
+      const res = await verifyPayment(hash, pack.priceCRO);
+      this.logStep(`· verifyPayment → ${res.ok ? "ok" : res.reason}${res.ok ? "" : " " + (res.detail ?? "")}`);
+      verify.disabled = false; verify.textContent = t("store.payVerify");
+      if (res.ok) {
+        markTxUsed(hash);
+        this.credits.addPack(pack, hash, Date.now());
+        this.logStep(`✓ purchase credited: +${pack.credits} Big Bangs`);
+        this.onChange();
+        const keep = this.logLines.slice();
+        this.render();
+        this.renderLog(keep);
+        this.msg(t("store.purchased", { n: pack.credits }), true);
+        return;
+      }
+      const key = ({
+        format: "store.payErrFormat", "not-found": "store.payErrNotFound", pending: "store.payErrPending",
+        failed: "store.payErrFailed", "wrong-recipient": "store.payErrRecipient", "wrong-chain": "store.payErrChain",
+        underpaid: "store.payErrUnderpaid", network: "store.payErrNetwork",
+      } as const)[res.reason];
+      setMsg(t(key, { n: this.cro(pack.priceCRO) }));
+    });
   }
 
   /** Secondary path: tear down and re-pair a fresh WalletConnect session, then
@@ -369,6 +441,20 @@ export class BigBangStore {
     .bbsReconnectLink{margin-top:2px;background:none;border:none;font-family:inherit;font-size:11px;font-weight:600;
       color:#9db0e6;text-decoration:underline;cursor:pointer;padding:4px}
     .bbsReconnectLink:disabled{opacity:.6;cursor:default}
+    .bbsPayOr{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#7c86ad;margin:4px 0}
+    .bbsPay{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:14px;padding:18px 16px;
+      border-radius:16px;background:radial-gradient(120% 100% at 50% 0%, rgba(120,90,255,.22), transparent 65%),rgba(30,26,64,.55);
+      border:1px solid rgba(150,170,255,.4)}
+    .bbsPayStep{font-size:11.5px;font-weight:700;color:#dbe3ff;line-height:1.45;text-align:center;max-width:320px}
+    .bbsPayAddr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#ffe6a8;word-break:break-all;
+      text-align:center;padding:9px 12px;border-radius:10px;background:rgba(6,10,26,.7);border:1px solid rgba(150,170,255,.28);width:100%;box-sizing:border-box}
+    .bbsPayInput{width:100%;box-sizing:border-box;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;
+      color:#eaf0ff;padding:13px 12px;border-radius:11px;background:rgba(6,10,26,.8);border:1px solid rgba(150,170,255,.35);outline:none}
+    .bbsPayInput:focus{border-color:rgba(150,170,255,.7)}
+    .bbsPayMsg{font-size:11px;font-weight:700;line-height:1.4;text-align:center;min-height:1px}
+    .bbsPayMsg.err{color:#ff9db0}
+    .bbsPayMsg.ok{color:#8dffbe}
+    .bbsPayMsg:empty{display:none}
     .bbsConfirm{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:14px;padding:18px 16px;
       border-radius:16px;background:radial-gradient(120% 100% at 50% 0%, rgba(120,90,255,.25), transparent 65%),rgba(40,30,90,.5);
       border:1px solid rgba(150,170,255,.4)}
