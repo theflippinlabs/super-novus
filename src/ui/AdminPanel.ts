@@ -14,17 +14,20 @@
 import { Payouts, type Payout } from "../net/Payouts";
 import { PrizePool, type PoolInfo } from "../net/PrizePool";
 import { Leaderboard, type BoardRow } from "../net/Leaderboard";
+import { Accounting, type AccountingSummary, type AcctTx } from "../net/Accounting";
 import { WalletManager, shortAddr } from "../net/WalletManager";
 import { TREASURY_ADDRESS, WEEKLY_PRIZE_USD, MONTHLY_PRIZE_USD } from "../config";
 
 export class AdminPanel {
   private el: HTMLElement;
+  private lastCsv: AcctTx[] = [];
 
   constructor(
     private payouts: Payouts,
     private wallet: WalletManager,
     private prizePool: PrizePool,
     private leaderboard: Leaderboard,
+    private accounting: Accounting,
   ) {
     this.injectStyles();
     const el = document.createElement("div");
@@ -100,8 +103,9 @@ export class AdminPanel {
     this.el.innerHTML = this.header(addr) + `<div class="admBody" id="admBody"><div class="admLoading">Chargement du tableau de bord…</div></div>`;
     this.bindChrome();
 
-    const [pool, pending, recent, weekN, monthN, topW, topM] = await Promise.all([
+    const [pool, acct, pending, recent, weekN, monthN, topW, topM] = await Promise.all([
       this.prizePool.compute().catch(() => this.prizePool.staticPool()),
+      this.accounting.summary().catch(() => null),
       this.payouts.listPending().catch(() => [] as Payout[]),
       this.payouts.listRecent(6).catch(() => [] as Payout[]),
       this.leaderboard.count("weekly").catch(() => 0),
@@ -110,15 +114,72 @@ export class AdminPanel {
       this.leaderboard.top("monthly", 5).catch(() => [] as BoardRow[]),
     ]);
 
+    this.lastCsv = acct?.txs ?? [];
     const body = this.el.querySelector("#admBody");
     if (!body) return;
     body.innerHTML =
       this.kpis(pool, pending.length, weekN, monthN) +
+      this.financeSection(acct) +
       this.pendingSection(pending) +
       this.standingsSection(topW, topM) +
       this.recentSection(recent);
 
     this.bindPending(pending);
+    this.bindFinance();
+  }
+
+  /* --------------------------- finance / compta --------------------------- */
+  private financeSection(a: AccountingSummary | null): string {
+    if (!a) return "";
+    const usd = (cro: number) => a.croUsd !== null ? ` <em>(${this.fr(cro * a.croUsd)} $)</em>` : "";
+    const bal = a.balanceCRO !== null ? `${this.fr(a.balanceCRO)} CRO${usd(a.balanceCRO)}` : "indisponible";
+    const rows = a.txs.slice(0, 12).map((t) => `
+      <div class="admLedRow">
+        <span class="admLedDate">${(t.date || "").slice(0, 10)}</span>
+        <span class="admLedLbl">${t.type === "in" ? "▲" : "▼"} ${t.label}</span>
+        <span class="admLedWho">${shortAddr(t.wallet)}</span>
+        <span class="admLedAmt ${t.type === "in" ? "admIn" : "admOut"}">${t.type === "in" ? "+" : "−"}${this.fr(t.amountCRO)} CRO</span>
+      </div>`).join("") || `<div class="admMuted admPad">Aucune transaction enregistrée pour l'instant.</div>`;
+    return `
+      <div class="admSection">
+        <div class="admSecH">Trésorerie & Compta</div>
+        <div class="admBalance">
+          <div class="admBalL">Solde du compte trésorerie</div>
+          <div class="admBalV">${bal}</div>
+          <div class="admBalAddr">${shortAddr(TREASURY_ADDRESS)}</div>
+        </div>
+        <div class="admBilan">
+          <div class="admBil admBilIn">
+            <div class="admBilV">+${this.fr(a.revenueTotalCRO)} CRO</div>
+            <div class="admBilL">Encaissé (Big Bang)</div>
+            <div class="admBilSub">${a.revenueCount} ventes · ${this.fr(a.revenueMonthCRO)} ce mois</div>
+          </div>
+          <div class="admBil admBilOut">
+            <div class="admBilV">−${this.fr(a.paidTotalCRO)} CRO</div>
+            <div class="admBilL">Prix versés</div>
+            <div class="admBilSub">${a.paidCount} payés · ${a.pendingCount} en attente</div>
+          </div>
+          <div class="admBil admBilNet">
+            <div class="admBilV">${a.netCRO >= 0 ? "+" : ""}${this.fr(a.netCRO)} CRO</div>
+            <div class="admBilL">Résultat net</div>
+            <div class="admBilSub">encaissé − versé</div>
+          </div>
+        </div>
+        <button id="admCsv" class="admBtn admBtnGhost">⬇ Exporter la compta (CSV)</button>
+        <div class="admLedger">${rows}</div>
+      </div>`;
+  }
+
+  private bindFinance(): void {
+    this.el.querySelector("#admCsv")?.addEventListener("click", () => {
+      const csv = this.accounting.toCSV(this.lastCsv);
+      const blob = new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `super-novus-compta-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    });
   }
 
   /* ------------------------------- KPIs ------------------------------- */
@@ -372,6 +433,29 @@ export class AdminPanel {
       .admPaid{color:#9fdc8a;background:rgba(120,220,120,.12)}
       .admPending{color:#f5c542;background:rgba(245,197,66,.12)}
       .admRecTx{flex-shrink:0}
+      .admBalance{background:radial-gradient(130% 200% at 0% 0%,rgba(245,197,66,.16),transparent 55%),linear-gradient(180deg,rgba(40,32,12,.6),rgba(20,16,8,.6));
+        border:1px solid rgba(245,197,66,.36);border-radius:16px;padding:16px;text-align:center;margin-bottom:12px}
+      .admBalL{font-size:10px;letter-spacing:1.5px;color:#d8c58a;font-weight:700;text-transform:uppercase}
+      .admBalV{font-size:26px;font-weight:800;color:#ffe9a8;margin:6px 0 2px;font-variant-numeric:tabular-nums;word-break:break-word}
+      .admBalV em{font-style:normal;font-size:14px;color:#c9b88a}
+      .admBalAddr{font-size:11px;color:#8b93b8;font-family:ui-monospace,Menlo,monospace}
+      .admBilan{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px}
+      .admBil{background:rgba(16,20,44,.6);border:1px solid rgba(140,170,255,.14);border-radius:14px;padding:11px 8px;text-align:center;min-width:0}
+      .admBilIn{border-color:rgba(120,220,120,.3)}
+      .admBilOut{border-color:rgba(224,112,138,.3)}
+      .admBilNet{border-color:rgba(245,197,66,.3)}
+      .admBilV{font-size:14px;font-weight:800;font-variant-numeric:tabular-nums;word-break:break-word}
+      .admBilIn .admBilV{color:#9fdc8a}.admBilOut .admBilV{color:#e88aa0}.admBilNet .admBilV{color:var(--gold,#f5c542)}
+      .admBilL{font-size:9px;letter-spacing:.5px;color:#8fa0d8;font-weight:700;margin-top:4px;text-transform:uppercase}
+      .admBilSub{font-size:8.5px;color:#6f7aa0;margin-top:3px}
+      .admBtnGhost{width:100%;margin-bottom:12px;background:rgba(20,26,58,.6);border:1px solid rgba(140,170,255,.3);color:#cfd8ff;font-weight:700}
+      .admLedger{display:flex;flex-direction:column;gap:4px}
+      .admLedRow{display:flex;align-items:center;gap:8px;padding:8px 10px;background:rgba(14,18,40,.5);border-radius:9px;font-size:11.5px}
+      .admLedDate{color:#8b93b8;font-variant-numeric:tabular-nums;flex-shrink:0;width:66px}
+      .admLedLbl{flex:1;min-width:0;color:#dfe6ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .admLedWho{color:#8fa0d8;flex-shrink:0}
+      .admLedAmt{font-weight:800;font-variant-numeric:tabular-nums;flex-shrink:0}
+      .admLedAmt.admIn{color:#9fdc8a}.admLedAmt.admOut{color:#e88aa0}
       @media(prefers-reduced-motion:reduce){.admOverlay{backdrop-filter:none}}
     `;
     document.head.appendChild(s);

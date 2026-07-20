@@ -20,6 +20,7 @@ export interface Payout {
   best_score: number;
   status: string;
   tx_hash: string | null;
+  amount_cro: number | null;
 }
 
 export class Payouts {
@@ -86,14 +87,12 @@ export class Payouts {
 
   private async record(p: Payout, tx: string): Promise<void> {
     if (!this.client) return;
-    const addr = this.wallet.getAddress();
-    if (!addr) return;
-    const message = `SUPER NOVUS payout ${p.period_type}:${p.period_start} tx:${tx}`;
-    let signature: string;
-    try { signature = await this.wallet.signMessage(message); }
-    catch (e) { console.error("[Payouts] record aborted — signature failed:", e); return; }
+    // No signature: the record-payout function verifies the payment ON-CHAIN
+    // (treasury -> winner) and reads the amount from the transaction itself, so
+    // recording is reliable (never blocked by a wallet sign prompt that never
+    // surfaces on mobile) and the amount is authoritative for the accounting.
     const { error } = await this.client.functions.invoke("record-payout", {
-      body: { period_type: p.period_type, period_start: p.period_start, tx_hash: tx, wallet: addr, signature },
+      body: { period_type: p.period_type, period_start: p.period_start, tx_hash: tx },
     });
     if (error) console.error("[Payouts] record failed (tx sent, status not updated):", error.message, error);
   }

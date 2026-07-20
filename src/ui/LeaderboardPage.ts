@@ -166,7 +166,7 @@ export class LeaderboardPage {
         <div class="pod pod${place}${filled ? "" : " empty"}${mine ? " me" : ""}">
           <div class="podTop">
             ${place === 1 ? `<div class="podCrown">🏆</div>` : ""}
-            <div class="podAvatarWrap"><img class="podAvatar" src="${avatar}" alt="" loading="lazy"><span class="podMedal">${medal(place)}</span></div>
+            <div class="podAvatarWrap"><img class="podAvatar" src="${escHtml(avatar)}" alt="" loading="lazy"><span class="podMedal">${medal(place)}</span></div>
             <div class="podName">${escHtml(name)}</div>
             <div class="podScore">${score}</div>
           </div>
@@ -186,7 +186,7 @@ export class LeaderboardPage {
       <div class="lbpRow${mine ? " me" : ""}"${idAttr} style="animation-delay:${Math.min(rank * 20, 360)}ms">
         <span class="c-rank">${medal || rank}</span>
         <span class="c-name">
-          <img class="lbpAv" src="${avatar}" alt="" loading="lazy">
+          <img class="lbpAv" src="${escHtml(avatar)}" alt="" loading="lazy">
           <span class="lbpNm">${escHtml(name)}${mine ? ` <em>${t("lb.you")}</em>` : ""}</span>
         </span>
         <span class="c-dd">${this.num(r.dist)}</span>
