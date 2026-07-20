@@ -657,8 +657,16 @@ export class GameEngine {
         return;
       }
     }
+    // The wallet is only ever asked to sign ONCE — a one-time "activation" that
+    // authorizes this device. Every future save is silent. Tell the player exactly
+    // that, so the single popup doesn't read like "sign every time".
+    this.leaderboard.onAuthorizing = () => {
+      btn.textContent = i18n.t("gameover.activating");
+      ss.textContent = i18n.t("gameover.activateOnce"); ss.className = "";
+    };
     // Signing over WalletConnect on iOS won't foreground the wallet by itself —
-    // show a tappable "open wallet to sign" prompt so the user can approve it.
+    // show a tappable "open wallet" prompt so the player can approve the one-time
+    // activation. (Only fires during that single authorization, never on saves.)
     this.wallet.onRequestSent = (url: string | null) => {
       if (url) ss.innerHTML = `<a href="${url}" rel="noopener" style="color:#9db8ff;font-weight:800;text-decoration:underline">${i18n.t("gameover.signOpen")}</a>`;
       else ss.textContent = i18n.t("gameover.signWait");
@@ -667,7 +675,7 @@ export class GameEngine {
     const r = this._pendingRun;
     let ok = false;
     try { ok = await this.leaderboard.submit(r.score, r.dist, r.dust, r.bigBangs); }
-    finally { this.wallet.onRequestSent = null; }
+    finally { this.wallet.onRequestSent = null; this.leaderboard.onAuthorizing = null; }
     if (ok){
       ss.textContent = i18n.t("gameover.saved"); ss.className = "ok";
       btn.style.display = "none";

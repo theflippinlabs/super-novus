@@ -8,6 +8,7 @@
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import { LOCAL_SAVE_KEY, SUPABASE_URL_DEFAULT, SUPABASE_ANON_KEY_DEFAULT, type LeaderboardPeriod } from "../config";
 import { WalletManager, shortAddr } from "./WalletManager";
+import { DeviceSession, delegationMessage, DELEGATION_TTL_MS, type Delegation } from "./DeviceSession";
 
 export interface BoardRow { pseudo: string; wallet: string; score: number; dist: number; dust: number; bigBangs: number; nickname: string | null; avatar: string | null; }
 export interface LocalBest { v: 1; score: number; dist: number; dust: number; }
@@ -50,18 +51,31 @@ export function periodStartUTC(period: LeaderboardPeriod): string {
 
 export class Leaderboard {
   private wallet: WalletManager;
+  private device = new DeviceSession();
   private client: SupabaseClient | null = null;
   private memBest: LocalBest = { v: 1, score: 0, dist: 0, dust: 0 };
   /** Last human-readable failure, surfaced to the debug overlay. */
   lastError: string | null = null;
   /** Precise reason the last submit() failed — shown on the Game Over screen. */
   lastSubmitReason: string | null = null;
+  /** Fired right before the ONE-TIME wallet authorization popup, so the UI can show
+      "one-time activation" copy instead of "Saving…". Never fired on silent saves. */
+  onAuthorizing: (() => void) | null = null;
   private diagnosed = false;
 
   constructor(wallet: WalletManager) {
     this.wallet = wallet;
     this.initClient();
   }
+
+  /** True when this device already holds a valid, silent-save authorization for the
+      connected wallet (no wallet popup needed to save). */
+  hasDeviceAuthorization(): boolean {
+    const addr = this.wallet.getAddress();
+    return Boolean(addr && this.device.getValid(addr));
+  }
+  /** Drop the device authorization (used when the wallet disconnects / switches). */
+  clearDeviceAuthorization(): void { this.device.clearDelegation(); }
 
   private get envUrl(): string { return (import.meta.env.VITE_SUPABASE_URL as string | undefined) || SUPABASE_URL_DEFAULT; }
   private get envKey(): string { return (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || SUPABASE_ANON_KEY_DEFAULT; }
@@ -216,29 +230,54 @@ export class Leaderboard {
       return false;
     }
 
+    // Obtain (once) a device authorization: the wallet signs a single message
+    // binding this device key to the wallet. Every subsequent score is signed
+    // LOCALLY by the device key — no wallet popup, no app-switch, no hang.
+    let deleg: Delegation | null = this.device.getValid(address);
+    if (!deleg) {
+      const exp = Date.now() + DELEGATION_TTL_MS;
+      const authMsg = delegationMessage(address, this.device.deviceAddress(), exp);
+      try {
+        try { this.onAuthorizing?.(); } catch { /* UI hook must never break the flow */ }
+        const sig = await this.wallet.signMessage(authMsg);
+        deleg = { wallet: address.toLowerCase(), device: this.device.deviceAddress().toLowerCase(), exp, sig };
+        this.device.save(deleg);
+        console.info(`${LOG} device authorized for ${shortAddr(address)} — future saves are silent.`);
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        const code = (e as { code?: number })?.code;
+        const timedOut = /sign-timeout/.test(msg);
+        const rejected = code === 4001 || /reject|denied|refus|cancel|annul/i.test(msg);
+        this.lastSubmitReason = timedOut
+          ? "Le wallet n'a pas répondu — rouvre-le, signe l'activation une seule fois, puis réessaie."
+          : rejected
+          ? "Activation refusée dans le wallet"
+          : `Activation impossible (wallet) : ${msg}`;
+        this.lastError = this.lastSubmitReason;
+        console.error(`${LOG} submit aborted — device authorization failed/rejected:`, e);
+        return false;
+      }
+    }
+
+    // Sign the score with the DEVICE key — local, instant, never opens the wallet.
     const ts = Date.now();
     const message = `SUPER NOVUS score:${score} dist:${dist} dust:${dust} ts:${ts}`;
     let signature: string;
     try {
-      signature = await this.wallet.signMessage(message);
+      signature = await this.device.signScore(message);
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      const code = (e as { code?: number })?.code;
-      const timedOut = /sign-timeout/.test(msg);
-      const rejected = code === 4001 || /reject|denied|refus|cancel|annul/i.test(msg);
-      this.lastSubmitReason = timedOut
-        ? "Le wallet n'a pas répondu — rouvre-le, signe le message, puis réessaie."
-        : rejected
-        ? "Signature refusée dans le wallet"
-        : `Signature impossible (wallet) : ${msg}`;
+      this.lastSubmitReason = `Signature locale impossible : ${e instanceof Error ? e.message : String(e)}`;
       this.lastError = this.lastSubmitReason;
-      console.error(`${LOG} submit aborted — signature failed/rejected:`, e);
+      console.error(`${LOG} submit aborted — device signature failed:`, e);
       return false;
     }
 
     // Guard the network call so a hung request can't leave the UI stuck on "Saving…".
     const invoke = this.client.functions.invoke("submit-score", {
-      body: { wallet: address, score, dist, dust, ts, signature, bigbangs: bigBangs },
+      body: {
+        wallet: address, score, dist, dust, ts, signature, bigbangs: bigBangs,
+        delegation: { device: deleg.device, exp: deleg.exp, sig: deleg.sig },
+      },
     });
     let data: any, error: any;
     try {
@@ -262,10 +301,13 @@ export class Leaderboard {
       // function rejecting a bad signature (it returns {error:"signature invalid"}).
       // Distinguish them by reading the body so we never mislabel one as the other.
       const sigInvalid = /signature\s*invalid/i.test(detail || "");
+      // A rejected signature most likely means a stale/expired device authorization
+      // (or the wallet changed). Drop it so the next save re-authorizes with one tap.
+      if (sigInvalid) this.device.clearDelegation();
       // Surface the EXACT cause (do not hide it) — this reaches the Game Over screen.
       this.lastSubmitReason =
         status === 404 ? "Serveur de scores non déployé (submit-score 404)"
-        : sigInvalid ? `Signature refusée par le serveur${recoveredHint(detail)} — réessaie et signe le message dans ton wallet.`
+        : sigInvalid ? `Autorisation expirée${recoveredHint(detail)} — réessaie pour la réactiver en un tap.`
         : status === 401 ? "Fonction protégée par JWT — redéploie avec --no-verify-jwt (401)"
         : status === 403 ? "Accès refusé (403) — vérifie la clé Supabase / le déploiement"
         : status === 429 ? "Trop de soumissions — patiente ~30 s (429)"
