@@ -27,7 +27,7 @@ function glowTex(inner: string, mid: string): THREE.CanvasTexture {
 const TEX: Record<string, any> = {
   star:   glowTex("rgba(255,252,240,1)", "rgba(255,180,60,.6)"),
   ember:  glowTex("rgba(255,205,140,.95)", "rgba(255,100,30,.42)"),
-  gold:   glowTex("rgba(255,244,200,1)", "rgba(245,197,66,.55)"),
+  gold:   glowTex("rgba(255,250,214,1)", "rgba(255,190,36,.82)"),
   blue:   glowTex("rgba(235,248,255,1)", "rgba(110,185,255,.55)"),
   spark:  glowTex("rgba(255,255,255,1)", "rgba(255,220,150,.6)"),
   white:  glowTex("rgba(255,255,255,1)", "rgba(220,235,255,.5)"),
@@ -234,6 +234,75 @@ const PlanetFactory: any = {
       ctx.globalAlpha = 1;
     });
   },
+  lava(){
+    /* Monde volcanique — croûte sombre veinée de rivières de lave incandescente. */
+    return canvasTex(256, 128, (ctx, w, h) => {
+      const g = ctx.createLinearGradient(0,0,0,h);
+      g.addColorStop(0, "#1c0d08"); g.addColorStop(.5, "#2e150c"); g.addColorStop(1, "#1c0d08");
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+      for (let i = 0; i < 8; i++)
+        this._blob(ctx, rand(0,w), rand(14,h-14), rand(8,20), `hsl(${rand(8,20)}, 60%, ${rand(8,16)}%)`);
+      /* fissures de lave brillantes */
+      for (let i = 0; i < 26; i++){
+        ctx.strokeStyle = `hsla(${rand(18,42)}, 100%, ${rand(52,66)}%, ${rand(.6,.95)})`;
+        ctx.lineWidth = rand(1, 3.2);
+        ctx.beginPath();
+        let x = rand(0,w), y = rand(0,h);
+        ctx.moveTo(x, y);
+        for (let s = 0; s < 5; s++){ x += rand(-22,22); y += rand(-10,10); ctx.lineTo(x, y); }
+        ctx.stroke();
+      }
+      for (let i = 0; i < 40; i++){
+        ctx.fillStyle = `hsla(${rand(20,50)}, 100%, 60%, ${rand(.4,.9)})`;
+        ctx.fillRect(Math.random()*w, Math.random()*h, rand(1,3), rand(1,3));
+      }
+    });
+  },
+  frozen(){
+    /* Monde glacé — bleu givré, banquises et crevasses. */
+    return canvasTex(256, 128, (ctx, w, h) => {
+      const g = ctx.createLinearGradient(0,0,0,h);
+      g.addColorStop(0, "#cfe8f6"); g.addColorStop(.5, "#8fc4e6"); g.addColorStop(1, "#cfe8f6");
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+      for (let i = 0; i < 12; i++)
+        this._blob(ctx, rand(0,w), rand(12,h-12), rand(8,20), `hsla(${rand(190,210)}, ${rand(30,55)}%, ${rand(70,88)}%, .7)`);
+      for (let i = 0; i < 22; i++){
+        ctx.strokeStyle = `hsla(205, 60%, ${rand(40,60)}%, ${rand(.3,.6)})`;
+        ctx.lineWidth = rand(1, 2.4);
+        ctx.beginPath();
+        let x = rand(0,w), y = rand(0,h);
+        ctx.moveTo(x, y);
+        for (let s = 0; s < 4; s++){ x += rand(-24,24); y += rand(-8,8); ctx.lineTo(x, y); }
+        ctx.stroke();
+      }
+    });
+  },
+  crystal(){
+    /* Monde cristallin — facettes émeraude et violet, éclats brillants. */
+    return canvasTex(256, 128, (ctx, w, h) => {
+      const baseHue = Math.random() < .5 ? 150 : 280;   // emerald or violet
+      const g = ctx.createLinearGradient(0,0,0,h);
+      g.addColorStop(0, `hsl(${baseHue}, 55%, 14%)`);
+      g.addColorStop(.5, `hsl(${baseHue}, 60%, 26%)`);
+      g.addColorStop(1, `hsl(${baseHue}, 55%, 14%)`);
+      ctx.fillStyle = g; ctx.fillRect(0,0,w,h);
+      /* facettes cristallines */
+      for (let i = 0; i < 46; i++){
+        const cx = rand(0,w), cy = rand(0,h), s = rand(4,13);
+        ctx.fillStyle = `hsla(${baseHue + rand(-24,24)}, ${rand(45,75)}%, ${rand(38,62)}%, ${rand(.4,.8)})`;
+        ctx.beginPath();
+        ctx.moveTo(cx, cy - s);
+        ctx.lineTo(cx + s*0.7, cy);
+        ctx.lineTo(cx, cy + s);
+        ctx.lineTo(cx - s*0.7, cy);
+        ctx.closePath(); ctx.fill();
+      }
+      for (let i = 0; i < 30; i++){
+        ctx.fillStyle = `hsla(${baseHue}, 80%, 82%, ${rand(.5,.9)})`;
+        ctx.fillRect(Math.random()*w, Math.random()*h, rand(1,2), rand(1,2));
+      }
+    });
+  },
   fictional(){
     const hue = rand(0, 360);
     const style = Math.random();
@@ -286,15 +355,18 @@ const PlanetFactory: any = {
   build(type: string, r: number){
     const group = new THREE.Group();
     const map = this[type]();
-    const isRocky = ["earth","mars","mercury","venus","fictional"].includes(type);
+    const isRocky = ["earth","mars","mercury","venus","fictional","lava","frozen","crystal"].includes(type);
+    // Lava worlds glow faintly warm; crystal worlds shimmer a touch cooler. Still
+    // kept dim so they never outshine the obstacles the player must read.
+    const emissive = type === "lava" ? 0x2a0e04 : type === "crystal" ? 0x0a1418 : 0x070910;
     const mat = new THREE.MeshStandardMaterial({
       map,
       roughness: isRocky ? 0.92 : 0.75,
       metalness: 0.02,
       bumpMap: isRocky ? this.bump() : null,
       bumpScale: isRocky ? 0.06 : 0,
-      emissive: 0x070910,
-      emissiveIntensity: 0.28,   // dimmer — planets must never outshine obstacles
+      emissive,
+      emissiveIntensity: type === "lava" ? 0.42 : 0.28,   // dim — planets must never outshine obstacles
     });
     const body = new THREE.Mesh(new THREE.SphereGeometry(r, 34, 24), mat);
     body.rotation.z = rand(-0.35, 0.35);
@@ -323,7 +395,7 @@ const PlanetFactory: any = {
     return {group, body};
   },
   randomType(){
-    const t = ["earth","mars","jupiter","saturn","neptune","uranus","mercury","venus","fictional","fictional"];
+    const t = ["earth","mars","jupiter","saturn","neptune","uranus","mercury","venus","fictional","lava","frozen","crystal"];
     return t[(Math.random()*t.length)|0];
   }
 };

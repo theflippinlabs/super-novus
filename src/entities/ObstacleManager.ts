@@ -42,14 +42,18 @@ export class ObstacleManager {
     this.rockSlots = Array.from({length:this.rockCount}, () => ({
       used:false, x:0, y:0, z:1e9, s:1, rx:0, ry:0, sx:0, sy:0, vx:0, vy:0, tintIdx:0
     }));
-    // Per-instance colour variety (tints the shared rock texture): neutral rock,
-    // warm iron-rich, icy blue, dark metallic, and pale grey. Purely visual.
+    // Per-instance colour variety (tints the shared rock texture) so every asteroid
+    // feels unique: neutral rock, dark basalt, rusty iron, icy blue, crystal cyan,
+    // mineral green, metallic steel, pale grey. Purely visual.
     this.rockTints = [
-      new THREE.Color(1.0, 1.0, 1.0),
-      new THREE.Color(1.0, 0.82, 0.62),
-      new THREE.Color(0.70, 0.86, 1.0),
-      new THREE.Color(0.58, 0.66, 0.80),
-      new THREE.Color(0.90, 0.90, 0.98),
+      new THREE.Color(0.92, 0.92, 0.98),   // neutral rock
+      new THREE.Color(0.40, 0.44, 0.55),   // dark basalt
+      new THREE.Color(1.05, 0.62, 0.38),   // rusty iron
+      new THREE.Color(0.60, 0.84, 1.10),   // icy blue
+      new THREE.Color(0.55, 0.98, 1.15),   // crystal cyan
+      new THREE.Color(0.58, 1.05, 0.72),   // mineral green
+      new THREE.Color(0.72, 0.78, 0.95),   // metallic steel
+      new THREE.Color(1.05, 0.92, 0.66),   // sandy/warm
     ];
     this._dummy = new THREE.Object3D();
   }
@@ -127,18 +131,46 @@ export class ObstacleManager {
   }
   debris(z, rng: any = null){
     const g = new THREE.Group();
-    const mat = new THREE.MeshStandardMaterial({color:0x8a90a8, roughness:.5, metalness:.8, emissive:0x0a0c18, emissiveIntensity:.5});
-    g.add(new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 2.2), mat));
-    const panMat = new THREE.MeshStandardMaterial({color:0x1a3a8a, roughness:.4, metalness:.6, emissive:0x0a1a4a, emissiveIntensity:.7});
+    // Damaged-paint hull: each satellite gets a slightly different worn body colour
+    // (weathered white, grey steel, rusty bronze) so no two look identical.
+    const hulls = [0x9aa0b4, 0x8a90a8, 0xa89078, 0xb0a090, 0x7c8296];
+    const hull = hulls[(Math.random()*hulls.length)|0];
+    const mat = new THREE.MeshStandardMaterial({color:hull, roughness:.62, metalness:.72, emissive:0x0a0c18, emissiveIntensity:.5});
+    const body = new THREE.Mesh(new THREE.BoxGeometry(1.2, 1.2, 2.2), mat);
+    g.add(body);
+    // Rusty stains / damaged paint patches — small dark-orange decals on the hull.
+    for (let r = 0; r < 2; r++){
+      const rust = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.5, 0.06),
+        new THREE.MeshStandardMaterial({color:0x6a3a1e, roughness:.9, metalness:.2, emissive:0x180a04, emissiveIntensity:.4}));
+      rust.position.set(rand(-0.4,0.4), 0.61, rand(-0.9,0.9));
+      rust.rotation.x = -Math.PI/2;
+      g.add(rust);
+    }
+    // Solar panels — bluish or amber cells, each satellite one or the other.
+    const panelColor = Math.random() < 0.5 ? 0x1a3a8a : 0x7a5410;
+    const panelEmis = panelColor === 0x1a3a8a ? 0x0a1a4a : 0x2a1c04;
+    const panMat = new THREE.MeshStandardMaterial({color:panelColor, roughness:.35, metalness:.7, emissive:panelEmis, emissiveIntensity:.8});
     const p1 = new THREE.Mesh(new THREE.BoxGeometry(3.2, 0.08, 1.3), panMat);
     p1.position.x = 2.1; p1.rotation.z = rand(-0.6, 0.2);
     const p2 = p1.clone();
     p2.position.x = -2.1; p2.rotation.z = rand(-0.2, 0.6);
     g.add(p1, p2);
+    // Tiny blinking status LEDs — bright emissive dots (red, green, amber) that read
+    // as a working (or dying) piece of tech even from a distance.
+    const ledColors = [0xff3b30, 0x34ff6a, 0xffb020, 0x30c8ff];
+    const ledGeo = new THREE.SphereGeometry(0.11, 6, 5);
+    const leds: any[] = [];
+    for (let l = 0; l < 3; l++){
+      const col = ledColors[(Math.random()*ledColors.length)|0];
+      const led = new THREE.Mesh(ledGeo, new THREE.MeshBasicMaterial({color:col}));
+      led.position.set(rand(-0.4,0.4), 0.66, -0.9 + l*0.9);
+      g.add(led);
+      leds.push({m:led, ph:Math.random()*6.28, sp:2 + Math.random()*4});
+    }
     g.position.set(rr(rng, -CFG.fieldX, CFG.fieldX), rr(rng, -CFG.fieldY, CFG.fieldY), z);
     g.rotation.set(Math.random()*3, Math.random()*3, Math.random()*3);   // visual only
     this.scene.add(g);
-    this.list.push({kind:"debris", mesh:g, r:1.8, spin:rand(0.8, 2.0), vx:rr(rng, -1.5,1.5), vy:rr(rng, -1,1)});
+    this.list.push({kind:"debris", mesh:g, r:1.8, spin:rand(0.8, 2.0), vx:rr(rng, -1.5,1.5), vy:rr(rng, -1,1), leds});
   }
   blackHole(z, rng: any = null){
     const g = new THREE.Group();
@@ -201,6 +233,7 @@ export class ObstacleManager {
       }
       if (o.mesh){
         if (o.spin){ o.mesh.rotation.y += o.spin*dt; if (o.kind === "debris") o.mesh.rotation.x += o.spin*0.7*dt; }
+        if (o.leds) for (const L of o.leds){ const b = 0.35 + 0.65*(0.5+0.5*Math.sin(t*L.sp + L.ph)); L.m.material.opacity = b; L.m.material.transparent = true; }
         if (o.body) o.body.rotation.y += 0.08*dt;
         if (o.vx || o.vy){ o.mesh.position.x += o.vx*dt; o.mesh.position.y += o.vy*dt; }
         if (o.diskMat) o.diskMat.uniforms.uTime.value = t;

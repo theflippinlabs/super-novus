@@ -14,7 +14,7 @@ export class StarDustSystem {
     this.clusters = [];
   }
   clear(){
-    for (const c of this.clusters) this.scene.remove(c.pts);
+    for (const c of this.clusters){ this.scene.remove(c.pts); if (c.halo) this.scene.remove(c.halo); }
     this.clusters.length = 0;
   }
   spawnChain(z, rng: any = null){
@@ -42,22 +42,36 @@ export class StarDustSystem {
     }
     geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
     const pts = new THREE.Points(geo, new THREE.PointsMaterial({
-      map:TEX.gold, size:1.3, transparent:true, opacity:.95,
+      map:TEX.gold, size:1.6, transparent:true, opacity:1,
       blending:THREE.AdditiveBlending, depthWrite:false, sizeAttenuation:true
     }));
     pts.position.set(x, y, z);
     this.scene.add(pts);
-    this.clusters.push({pts, t:Math.random()*6, r:2.4});
+    // A soft golden aura around the whole cluster so it reads as valuable cosmic
+    // energy from far away — additive, gently pulsing.
+    const halo = new THREE.Sprite(new THREE.SpriteMaterial({ map:TEX.gold, color:0xffd23a, transparent:true, opacity:.34, depthWrite:false, blending:THREE.AdditiveBlending }));
+    halo.scale.setScalar(5.2);
+    halo.position.set(x, y, z);
+    this.scene.add(halo);
+    this.clusters.push({pts, halo, t:Math.random()*6, r:2.4});
   }
   update(dt, t, player, game){
     const cullZ = player.pos.z + 36;
     for (let i = this.clusters.length-1; i >= 0; i--){
       const c = this.clusters[i];
       c.t += dt;
-      c.pts.rotation.y += dt*1.4;
-      c.pts.material.size = 1.3 + Math.sin(c.t*5)*0.3;
+      c.pts.rotation.y += dt*1.8;
+      // Stronger sparkle + shimmer so the dust visibly pulses like living energy.
+      c.pts.material.size = 1.6 + Math.sin(c.t*5.5)*0.5;
+      c.pts.material.opacity = 0.85 + 0.15*Math.sin(c.t*8.0);
+      if (c.halo){
+        c.halo.position.copy(c.pts.position);
+        c.halo.scale.setScalar(5.0 + Math.sin(c.t*3.2)*0.9);
+        c.halo.material.opacity = 0.28 + 0.14*(0.5+0.5*Math.sin(c.t*4.0));
+      }
       if (c.pts.position.z > cullZ){
         this.scene.remove(c.pts);
+        if (c.halo) this.scene.remove(c.halo);
         this.clusters.splice(i,1);
         continue;
       }
@@ -67,12 +81,13 @@ export class StarDustSystem {
         c.pts.position.addScaledVector(dir, (7-d)*7*dt);
       }
       if (d < c.r + player.r){
-        this.particles.burst(c.pts.position, 30, 24, 2.4, 0xffe9a0, 0.55);
-        this.particles.burst(c.pts.position, 12, 12, 1.3, 0xffffff, 0.5);
+        this.particles.burst(c.pts.position, 36, 26, 2.6, 0xffdf6a, 0.6);
+        this.particles.burst(c.pts.position, 14, 13, 1.3, 0xffffff, 0.5);
         this.audio.ping();
         if (navigator.vibrate) navigator.vibrate(10);
         game.collectDust();
         this.scene.remove(c.pts);
+        if (c.halo) this.scene.remove(c.halo);
         this.clusters.splice(i,1);
       }
     }
