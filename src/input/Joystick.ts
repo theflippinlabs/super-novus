@@ -67,7 +67,22 @@ export class Joystick {
     base.addEventListener("pointermove", (e) => this.onMove(e));
     base.addEventListener("pointerup", (e) => this.onUp(e));
     base.addEventListener("pointercancel", (e) => this.onUp(e));
-    nova.addEventListener("click", (e) => { e.preventDefault(); if (this.ready) this.onNova(); });
+    // Fire NOVA on pointerdown, not click — a tap must go BOOM instantly. `click`
+    // needs a clean down+up on the same spot and adds latency on mobile, which is
+    // why the button felt unresponsive. Guard against double-fire within a frame.
+    let lastFire = 0;
+    const fireNova = (e: Event) => {
+      e.preventDefault(); e.stopPropagation();
+      if (!this.ready) return;
+      const now = (typeof performance !== "undefined" ? performance.now() : 0);
+      if (now - lastFire < 120) return;   // ignore the synthetic click after pointerdown
+      lastFire = now;
+      this.nova.style.transform = "scale(.9)";
+      setTimeout(() => { this.nova.style.transform = "scale(1)"; }, 90);
+      this.onNova();
+    };
+    nova.addEventListener("pointerdown", fireNova);
+    nova.addEventListener("click", fireNova);   // desktop / fallback
     // Retranslate the aria label on language change.
     nova.setAttribute("aria-label", t("hud.novaHint"));
   }

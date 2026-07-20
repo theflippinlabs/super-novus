@@ -8,23 +8,59 @@
    durable, recoverable receipt (tx hash kept in history) even though the balance
    itself currently lives on the device. The API is async and abstracted so a
    Supabase-backed balance can replace the store later without touching the UI. */
-import { BB_CREDITS_PREFIX, type BigBangPack } from "../config";
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { BB_CREDITS_PREFIX, SUPABASE_URL_DEFAULT, SUPABASE_ANON_KEY_DEFAULT, type BigBangPack } from "../config";
 import { WalletManager } from "./WalletManager";
 
 export interface BBPurchase {
-  packId: BigBangPack["id"];
+  packId: BigBangPack["id"] | "gift";
   emoji: string;
   credits: number;
   cro: number;
   txHash: string;
   ts: number;        // epoch ms
 }
-interface Stored { purchased: number; consumed: number; history: BBPurchase[]; }
+interface Stored { purchased: number; consumed: number; history: BBPurchase[]; appliedGrants: number[]; }
 
-const EMPTY: Stored = { purchased: 0, consumed: 0, history: [] };
+const EMPTY: Stored = { purchased: 0, consumed: 0, history: [], appliedGrants: [] };
 
 export class BigBangCredits {
-  constructor(private wallet: WalletManager) {}
+  private client: SupabaseClient | null = null;
+
+  constructor(private wallet: WalletManager) {
+    const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || SUPABASE_URL_DEFAULT;
+    const key = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || SUPABASE_ANON_KEY_DEFAULT;
+    if (url && key) this.client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  }
+
+  /** Pull any free Big Bangs the owner gifted to the connected wallet and add the
+      not-yet-applied ones to the local balance. Returns how many credits were
+      newly added (0 if none / offline). Safe to call on every connect. */
+  async syncGrants(now: number): Promise<number> {
+    const addr = this.wallet.getAddress();
+    if (!this.client || !addr) return 0;
+    const { data, error } = await this.client
+      .from("sn_bigbang_grants").select("id,credits,note,created_at")
+      .eq("wallet", addr.toLowerCase()).order("id", { ascending: true });
+    if (error) { console.warn("[BigBangCredits] grant sync failed:", error.message); return 0; }
+    const s = this.read(addr);
+    const applied = new Set(s.appliedGrants);
+    let added = 0;
+    for (const g of data ?? []) {
+      const id = Number(g.id);
+      if (applied.has(id)) continue;
+      const credits = Math.max(0, Math.floor(Number(g.credits)) || 0);
+      if (credits <= 0) { applied.add(id); continue; }
+      s.purchased += credits;
+      s.appliedGrants.push(id);
+      applied.add(id);
+      const ts = g.created_at ? Date.parse(g.created_at) || now : now;
+      s.history.push({ packId: "gift", emoji: "🎁", credits, cro: 0, txHash: `grant#${id}`, ts });
+      added += credits;
+    }
+    if (added > 0) this.write(addr, s);
+    return added;
+  }
 
   /** Big Bangs available to spend right now (never negative). */
   available(wallet?: string): number {
@@ -76,6 +112,7 @@ export class BigBangCredits {
           purchased: Number(p.purchased) || 0,
           consumed: Number(p.consumed) || 0,
           history: Array.isArray(p.history) ? p.history : [],
+          appliedGrants: Array.isArray(p.appliedGrants) ? p.appliedGrants.map((n: any) => Number(n)).filter((n: number) => Number.isFinite(n)) : [],
         };
       }
     } catch { /* private mode / bad json */ }

@@ -21,6 +21,10 @@ import { TREASURY_ADDRESS, WEEKLY_PRIZE_USD, MONTHLY_PRIZE_USD } from "../config
 export class AdminPanel {
   private el: HTMLElement;
   private lastCsv: AcctTx[] = [];
+  /** Admin code kept in memory for the open session only — never persisted to
+      storage (clear-text secret storage is a security anti-pattern). Typed once
+      per admin session. */
+  private grantSecret = "";
 
   constructor(
     private payouts: Payouts,
@@ -120,12 +124,63 @@ export class AdminPanel {
     body.innerHTML =
       this.kpis(pool, pending.length, weekN, monthN) +
       this.financeSection(acct) +
+      this.grantSection() +
       this.pendingSection(pending) +
       this.standingsSection(topW, topM) +
       this.recentSection(recent);
 
     this.bindPending(pending);
     this.bindFinance();
+    this.bindGrant();
+  }
+
+  /* ---------------------- distribute free Big Bangs ---------------------- */
+  private grantSection(): string {
+    return `
+      <div class="admSection">
+        <div class="admSecH">Offrir des Big Bangs (promo)</div>
+        <div class="admGrant">
+          <input id="admGWallet" class="admGInput" placeholder="Adresse wallet du destinataire (0x…)" autocomplete="off" spellcheck="false">
+          <div class="admGRow">
+            <input id="admGCredits" class="admGInput admGNum" type="number" min="1" max="90" value="3" inputmode="numeric">
+            <span class="admGUnit">Big Bangs <em>(3 = une partie)</em></span>
+          </div>
+          <input id="admGNote" class="admGInput" placeholder="Note — ex : promo lancement (optionnel)" autocomplete="off">
+          <button id="admGrantBtn" class="admBtn admBtnGold">🎁 OFFRIR</button>
+          <div id="admGStatus" class="admStatus"></div>
+          <div class="admHint">Le destinataire reçoit ses Big Bangs à sa prochaine ouverture du jeu, connecté avec ce wallet.</div>
+        </div>
+      </div>`;
+  }
+
+  private bindGrant(): void {
+    const btn = this.el.querySelector("#admGrantBtn") as HTMLButtonElement | null;
+    if (!btn) return;
+    btn.addEventListener("click", async () => {
+      const w = (this.el.querySelector("#admGWallet") as HTMLInputElement).value.trim();
+      const credits = Number((this.el.querySelector("#admGCredits") as HTMLInputElement).value);
+      const note = (this.el.querySelector("#admGNote") as HTMLInputElement).value.trim();
+      const status = this.el.querySelector("#admGStatus") as HTMLElement;
+      if (!/^0x[0-9a-fA-F]{40}$/.test(w)) { status.className = "admStatus admStatusErr"; status.textContent = "Adresse wallet invalide (0x… 40 caractères)."; return; }
+      if (!(credits >= 1 && credits <= 90)) { status.className = "admStatus admStatusErr"; status.textContent = "Nombre de Big Bangs : entre 1 et 90."; return; }
+      let secret = this.grantSecret;
+      if (!secret) { secret = (prompt("Code admin (défini dans Supabase → ADMIN_SECRET) :") || "").trim(); if (!secret) return; }
+      btn.disabled = true; status.className = "admStatus"; status.textContent = "Envoi…";
+      try {
+        await this.payouts.grantBigBang(w, credits, note, secret);
+        this.grantSecret = secret;   // remember for this session only (in memory)
+        status.className = "admStatus admStatusOk";
+        status.textContent = `Offert ✓ — ${credits} Big Bang(s) à ${shortAddr(w)}.`;
+        (this.el.querySelector("#admGWallet") as HTMLInputElement).value = "";
+        (this.el.querySelector("#admGNote") as HTMLInputElement).value = "";
+        btn.disabled = false;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        if (/admin/i.test(msg) && /incorrect/i.test(msg)) this.grantSecret = "";
+        status.className = "admStatus admStatusErr"; status.textContent = "Échec : " + msg;
+        btn.disabled = false;
+      }
+    });
   }
 
   /* --------------------------- finance / compta --------------------------- */
@@ -456,6 +511,15 @@ export class AdminPanel {
       .admLedWho{color:#8fa0d8;flex-shrink:0}
       .admLedAmt{font-weight:800;font-variant-numeric:tabular-nums;flex-shrink:0}
       .admLedAmt.admIn{color:#9fdc8a}.admLedAmt.admOut{color:#e88aa0}
+      .admGrant{display:flex;flex-direction:column;gap:9px;background:linear-gradient(180deg,rgba(52,34,96,.4),rgba(20,16,44,.5));
+        border:1px solid rgba(170,130,255,.34);border-radius:16px;padding:14px}
+      .admGInput{pointer-events:auto;font-family:inherit;font-size:14px;color:#fff;background:#0a0e24;
+        border:1px solid #2a3a6a;border-radius:10px;padding:11px 12px;width:100%;outline:none}
+      .admGInput::placeholder{color:#6f7aa0}
+      .admGRow{display:flex;align-items:center;gap:10px}
+      .admGNum{width:88px;flex-shrink:0;font-weight:800;text-align:center}
+      .admGUnit{font-size:12px;color:#c9b8ff;font-weight:700}
+      .admGUnit em{font-style:normal;color:#8fa0d8;font-weight:400}
       @media(prefers-reduced-motion:reduce){.admOverlay{backdrop-filter:none}}
     `;
     document.head.appendChild(s);
