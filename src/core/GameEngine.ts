@@ -100,7 +100,7 @@ export class GameEngine {
     // Owner prize-payout console (?admin=1) — zero cost otherwise.
     if (new URLSearchParams(location.search).get("admin") === "1"){
       this.payouts = new Payouts(this.wallet, this.prizePool);
-      this.admin = new AdminPanel(this.payouts, this.wallet);
+      this.admin = new AdminPanel(this.payouts, this.wallet, this.prizePool, this.leaderboard);
     }
     // Big Bang Packs — buy credits in advance; revives then consume them instantly.
     this.credits = new BigBangCredits(this.wallet);

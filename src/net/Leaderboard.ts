@@ -290,6 +290,18 @@ export class Leaderboard {
     return { score: data.best_score ?? 0, dist: data.best_dist ?? 0, dust: data.best_dust ?? 0 };
   }
 
+  /** Total number of ranked entries (players) in a period — used by the admin
+      dashboard KPIs. 0 offline / on error. */
+  async count(period: LeaderboardPeriod, periodStart?: string): Promise<number> {
+    if (!this.client) return 0;
+    const start = periodStart ?? periodStartUTC(period);
+    const { count, error } = await this.client
+      .from("sn_leaderboard").select("*", { count: "exact", head: true })
+      .eq("period_type", period).eq("period_start", start);
+    if (error) { console.error(`${LOG} count failed (${period}):`, error.message); return 0; }
+    return count ?? 0;
+  }
+
   /** Connected wallet's rank in a period (1-based), or null if unavailable
       (not connected / not on the board / offline). */
   async myRank(period: LeaderboardPeriod): Promise<number | null> {
