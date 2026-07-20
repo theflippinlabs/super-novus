@@ -31,6 +31,13 @@ export class WalletManager {
   private listeners: Array<(addr: string | null, chainId: number | null) => void> = [];
   private bound: { p: Eip1193; handlers: Record<string, (...a: unknown[]) => void> } | null = null;
 
+  /** Optional step logger for the purchase pipeline. The Big Bang Store sets this
+      to render an on-device, always-visible trace (wallet connected → chainId →
+      payload → request sent → response → credited), so a failed payment shows
+      exactly which step stalled instead of a generic "Payment failed". */
+  onLog: ((msg: string) => void) | null = null;
+  private log(msg: string): void { try { this.onLog?.(msg); } catch { /* logging must never break the flow */ } }
+
   get projectId(): string {
     const env = (import.meta.env.VITE_WC_PROJECT_ID as string | undefined) ?? "";
     return env || WC_PROJECT_ID_DEFAULT;
@@ -113,6 +120,7 @@ export class WalletManager {
     // 1) injected first (MetaMask, Crypto.com, Rabby…)
     const inj = this.injected;
     if (inj) {
+      this.log("connect: injected provider found");
       const accounts = (await inj.request({ method: "eth_requestAccounts" })) as string[];
       if (!accounts?.length) throw new Error("Aucun compte autorisé");
       this.provider = inj;
@@ -120,6 +128,7 @@ export class WalletManager {
       await this.refreshChain();
       this.watch(inj);
       this.emit();                                    // show connected immediately
+      this.log(`connect: injected connected ${shortAddr(this.address)} chain=${this.chainId ?? "?"}`);
       // Switch to Cronos in the background — never block the connected state on
       // a chain-switch round-trip (which re-opens the wallet app on mobile).
       void this.switchToCronos(inj).then(() => this.emit());
@@ -127,6 +136,7 @@ export class WalletManager {
     }
     // 2) WalletConnect v2 (QR modal / mobile deep link)
     if (!this.projectId) throw new Error("VITE_WC_PROJECT_ID manquant");
+    this.log("connect: WalletConnect — opening wallet…");
     const wc = await this.initWc();
     await wc.enable(); // opens the QR modal / deep-links to the wallet app
     const accounts = (wc.accounts?.length ? wc.accounts
@@ -137,8 +147,39 @@ export class WalletManager {
     this.chainId = Number(wc.chainId ?? SUPPORTED_CHAIN_ID);
     this.watch(wc);
     this.emit();                                      // connected state now, no extra bounce
+    this.log(`connect: WC connected ${shortAddr(this.address)} chain=${this.chainId} approved=[${this.approvedChains().join(",") || "—"}]`);
     void this.switchToCronos(wc).then(() => this.emit());
     return this.address;
+  }
+
+  /** The eip155 chains actually approved in the active WalletConnect session. */
+  private approvedChains(): string[] {
+    if (!this.wc || this.provider !== this.wc) return [];
+    try {
+      const eip = (this.wc as unknown as { session?: { namespaces?: Record<string, { chains?: string[]; accounts?: string[] }> } })
+        .session?.namespaces?.eip155;
+      const set = new Set<string>();
+      for (const c of eip?.chains ?? []) set.add(c);
+      for (const a of eip?.accounts ?? []) { const p = a.split(":"); if (p.length >= 2) set.add(`${p[0]}:${p[1]}`); }
+      return [...set];
+    } catch { return []; }
+  }
+
+  /** Wait until the WalletConnect session is actually usable before sending a
+      transaction: a session object exists and at least one account is present.
+      On iOS the page is often restored from a deep-link round-trip before the SDK
+      has re-hydrated the session, so sending immediately would publish into a void.
+      Resolves true when ready, false if it never became ready within `ms`. */
+  private async waitForSession(ms = 4000): Promise<boolean> {
+    if (!this.wc || this.provider !== this.wc) return true; // injected: always ready
+    const deadline = Date.now() + ms;
+    // Date.now() is fine at runtime (this file is not a workflow script).
+    for (;;) {
+      const ready = Boolean(this.wc.session) && (this.wc.accounts?.length ?? 0) > 0;
+      if (ready) return true;
+      if (Date.now() >= deadline) return false;
+      await new Promise((r) => setTimeout(r, 150));
+    }
   }
 
   /** Lazily create (once) the WalletConnect v2 provider. */
@@ -242,12 +283,16 @@ export class WalletManager {
     const isWc = Boolean(this.wc) && this.provider === this.wc;
 
     if (isWc) {
+      this.log(`prepareCronos: WC session approved=[${this.approvedChains().join(",") || "—"}]`);
       // Authoritative: read the APPROVED session chains directly. If Cronos isn't
       // among them, the wallet never granted it — re-pair. We deliberately do NOT
       // call wallet_switchEthereumChain in that case, because the SDK would then
       // send the switch over the relay (a pointless second deep-link) and could
       // still leave the tx routed on an un-approved chain that the wallet drops.
-      if (!this.sessionHasChain(SUPPORTED_CHAIN_ID)) return "reconnect";
+      if (!this.sessionHasChain(SUPPORTED_CHAIN_ID)) {
+        this.log("prepareCronos: Cronos (eip155:25) NOT in session → reconnect");
+        return "reconnect";
+      }
       // Cronos IS approved → a LOCAL default-chain switch (no wallet round-trip)
       // so the next eth_sendTransaction is published on eip155:25, the chain the
       // wallet actually has in its session, and the prompt finally appears.
@@ -256,6 +301,7 @@ export class WalletManager {
       } catch { /* local switch is best-effort when the chain is already approved */ }
       this.chainId = SUPPORTED_CHAIN_ID;
       this.emit();
+      this.log("prepareCronos: routing chain set to 25 → ok");
       return "ok";
     }
 
@@ -392,34 +438,44 @@ export class WalletManager {
   async payCRO(to: string, croAmount: number): Promise<string> {
     if (!this.provider || !this.address) throw new PayError("no-wallet", "Wallet non connecté");
     if (!/^0x[0-9a-fA-F]{40}$/.test(to)) throw new PayError("failed", "Adresse de paiement invalide");
-    if (!(await this.ensureCronos()))
+    // Make sure the WalletConnect session is actually re-hydrated after the
+    // deep-link round-trip before we publish a request into a not-yet-ready relay.
+    this.log("payCRO: waiting for session readiness…");
+    const ready = await this.waitForSession();
+    this.log(`payCRO: session ready=${ready} (session=${Boolean(this.wc?.session)}, accounts=${this.wc?.accounts?.length ?? "n/a"})`);
+    if (!(await this.ensureCronos())) {
+      this.log(`payCRO: ensureCronos failed, chain=${this.chainId ?? "?"}`);
       throw new PayError("wrong-chain", "Réseau Cronos requis");
+    }
     const valueWei = BigInt(Math.trunc(croAmount)) * (10n ** 18n);
     const valueHex = "0x" + valueWei.toString(16);
+    const tx = { from: this.address, to, value: valueHex, data: "0x" };
+    this.log(`payCRO: payload from=${shortAddr(tx.from)} to=${shortAddr(to)} value=${croAmount} CRO chain=${this.chainId}`);
     try {
       // A wallet that receives a request for a chain not in its session drops it
       // WITHOUT ever responding — the promise would then hang forever and the UI
       // would sit on "Processing…". Race a timeout so we can surface a clear,
       // actionable message instead of an infinite spinner. `data:"0x"` is included
       // because a few wallets refuse to build a native transfer without it.
-      const req = this.provider.request({
-        method: "eth_sendTransaction",
-        params: [{ from: this.address, to, value: valueHex, data: "0x" }],
-      });
+      this.log("payCRO: eth_sendTransaction sent → opening wallet, awaiting confirmation…");
+      const req = this.provider.request({ method: "eth_sendTransaction", params: [tx] });
       const hash = await Promise.race([
         req,
         new Promise((_, rej) => setTimeout(() => rej(new PayError("timeout", "Aucune réponse du wallet")), 90_000)),
       ]);
+      this.log(`payCRO: wallet responded → ${String(hash).slice(0, 14)}…`);
       return String(hash);
     } catch (e) {
-      if (e instanceof PayError) throw e;
+      if (e instanceof PayError) { this.log(`payCRO: ${e.reason} — ${e.message}`); throw e; }
       const code = (e as { code?: number })?.code;
-      const msg = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
+      const raw = e instanceof Error ? e.message : String(e ?? "");
+      const msg = raw.toLowerCase();
+      this.log(`payCRO: wallet error code=${code ?? "?"} — ${raw.slice(0, 120)}`);
       if (code === 4001 || /reject|denied|refus|cancel|annul|user rejected/.test(msg))
-        throw new PayError("rejected", "Transaction refusée");
+        throw new PayError("rejected", raw || "Transaction refusée");
       if (/insufficient funds|insufficient balance|not enough|exceeds balance/.test(msg))
-        throw new PayError("funds", "Solde CRO insuffisant");
-      throw new PayError("failed", e instanceof Error ? e.message : String(e ?? "erreur"));
+        throw new PayError("funds", raw || "Solde CRO insuffisant");
+      throw new PayError("failed", raw || "erreur");
     }
   }
 
