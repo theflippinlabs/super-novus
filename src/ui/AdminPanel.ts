@@ -21,6 +21,10 @@ import { TREASURY_ADDRESS, WEEKLY_PRIZE_USD, MONTHLY_PRIZE_USD } from "../config
 export class AdminPanel {
   private el: HTMLElement;
   private lastCsv: AcctTx[] = [];
+  /** Admin code kept in memory for the open session only — never persisted to
+      storage (clear-text secret storage is a security anti-pattern). Typed once
+      per admin session. */
+  private grantSecret = "";
 
   constructor(
     private payouts: Payouts,
@@ -159,13 +163,12 @@ export class AdminPanel {
       const status = this.el.querySelector("#admGStatus") as HTMLElement;
       if (!/^0x[0-9a-fA-F]{40}$/.test(w)) { status.className = "admStatus admStatusErr"; status.textContent = "Adresse wallet invalide (0x… 40 caractères)."; return; }
       if (!(credits >= 1 && credits <= 90)) { status.className = "admStatus admStatusErr"; status.textContent = "Nombre de Big Bangs : entre 1 et 90."; return; }
-      let secret = "";
-      try { secret = localStorage.getItem("super-novus:adminsecret") || ""; } catch { /* ignore */ }
+      let secret = this.grantSecret;
       if (!secret) { secret = (prompt("Code admin (défini dans Supabase → ADMIN_SECRET) :") || "").trim(); if (!secret) return; }
       btn.disabled = true; status.className = "admStatus"; status.textContent = "Envoi…";
       try {
         await this.payouts.grantBigBang(w, credits, note, secret);
-        try { localStorage.setItem("super-novus:adminsecret", secret); } catch { /* ignore */ }
+        this.grantSecret = secret;   // remember for this session only (in memory)
         status.className = "admStatus admStatusOk";
         status.textContent = `Offert ✓ — ${credits} Big Bang(s) à ${shortAddr(w)}.`;
         (this.el.querySelector("#admGWallet") as HTMLInputElement).value = "";
@@ -173,7 +176,7 @@ export class AdminPanel {
         btn.disabled = false;
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        if (/admin/i.test(msg) && /incorrect/i.test(msg)) { try { localStorage.removeItem("super-novus:adminsecret"); } catch { /* ignore */ } }
+        if (/admin/i.test(msg) && /incorrect/i.test(msg)) this.grantSecret = "";
         status.className = "admStatus admStatusErr"; status.textContent = "Échec : " + msg;
         btn.disabled = false;
       }
