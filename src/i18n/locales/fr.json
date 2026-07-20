@@ -78,6 +78,7 @@
   "store.processing": "Paiement en cours…",
   "store.purchased": "✓ +{n} Big Bangs ajoutés à ton compte !",
   "store.errFunds": "Solde CRO insuffisant — il te faut {n} CRO (+ frais) sur Cronos.",
+  "store.errTimeout": "Aucune demande de paiement n'est apparue dans ton wallet. Rouvre ton wallet sur Cronos, ou tape Reconnecter, puis retape Acheter.",
   "store.switchTitle": "Ton wallet n'est pas sur le réseau Cronos",
   "store.switchBtn": "Passer sur Cronos",
   "store.switching": "Changement…",

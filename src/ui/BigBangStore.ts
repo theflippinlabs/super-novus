@@ -13,6 +13,10 @@ const BCP47: Record<string, string> = { fr: "fr-FR", en: "en-US", ko: "ko-KR" };
 export class BigBangStore {
   private el: HTMLElement;
   private busy = false;
+  // On-device diagnostics: append ?diag=1 to the URL to see the live wallet state
+  // (provider kind, routing chain, approved session chains) and each purchase step,
+  // so a silent payment failure becomes visible on the phone instead of a black box.
+  private readonly showDiag = /[?&]diag/i.test(location.search);
 
   constructor(
     private wallet: WalletManager,
@@ -50,7 +54,9 @@ export class BigBangStore {
         <div class="bbsSub">${t("store.subtitle")}</div>
         <div class="bbsCards">${cards}</div>
         <div id="bbsMsg" class="bbsMsg"></div>
+        ${this.showDiag ? `<pre id="bbsDiag" class="bbsDiag"></pre>` : ""}
       </div>`;
+    if (this.showDiag) this.diagSnap("open");
     (this.el.querySelector("#bbsClose") as HTMLElement).addEventListener("click", () => this.close());
     this.el.addEventListener("click", (e) => { if (e.target === this.el && !this.busy) this.close(); });
     for (const btn of this.el.querySelectorAll<HTMLButtonElement>(".bbsBuy"))
@@ -84,6 +90,22 @@ export class BigBangStore {
     if (m) { m.textContent = text; m.className = `bbsMsg ${ok ? "ok" : "err"}`; }
   }
 
+  /** Append a diagnostic line (only when ?diag is present). */
+  private diagLine(s: string): void {
+    if (!this.showDiag) return;
+    const d = this.el.querySelector("#bbsDiag") as HTMLElement | null;
+    if (d) d.textContent += (d.textContent ? "\n" : "") + s;
+  }
+
+  /** Dump the live wallet state (provider kind, routing chain, approved session
+      chains/accounts) so a wrong-chain / stale-session failure is visible. */
+  private diagSnap(label: string): void {
+    if (!this.showDiag) return;
+    const info = this.wallet.diag();
+    const acc = info.accounts.map((a) => a.replace(/:0x.*/i, "")).join(",") || "—";
+    this.diagLine(`[${label}] ${info.kind} chain=${info.chainId ?? "?"} approved=[${info.chains.join(",") || "—"}] acc=[${acc}]`);
+  }
+
   private async buy(packId: BigBangPack["id"]): Promise<void> {
     if (this.busy) return;
     const pack = BIG_BANG_PACKS.find((p) => p.id === packId);
@@ -94,26 +116,34 @@ export class BigBangStore {
     this.msg(t("store.processing"), true);
     try {
       // Connect on demand (explicit user action — no silent deep link).
-      if (!this.wallet.getAddress()) await this.wallet.connect();
-      // A session paired before Cronos was required is scoped to another chain, so
-      // the wallet silently drops a Cronos transaction (no prompt appears). Force a
-      // one-time reconnect so the payment actually surfaces in the wallet.
-      if (!this.wallet.hasCronosSession()) { this.showReconnect(pack); return; }
-      // Make sure we're on Cronos BEFORE paying. If we can't switch automatically,
-      // show a Switch button + manual steps rather than a dead-end error.
-      if (!(await this.wallet.ensureCronos())) { this.showSwitch(pack); return; }
+      if (!this.wallet.getAddress()) { this.diagLine("connect…"); await this.wallet.connect(); }
+      this.diagSnap("connected");
+      // Authoritative Cronos check: prepareCronos() succeeds ONLY when the session
+      // actually includes Cronos (and, as a side effect, routes the payment on
+      // eip155:25 so the wallet stops silently dropping it). "reconnect" means the
+      // session predates Cronos → re-pair; "switch" means an injected wallet is on
+      // the wrong network → manual switch. Either way, never a dead-end.
+      const prep = await this.wallet.prepareCronos();
+      this.diagLine(`prepareCronos → ${prep}`);
+      this.diagSnap("prepared");
+      if (prep === "reconnect") { this.showReconnect(pack); return; }
+      if (prep === "switch") { this.showSwitch(pack); return; }
+      this.diagLine("payCRO → opening wallet…");
       const txHash = await this.wallet.payCRO(BIG_BANG_RECIPIENT, pack.priceCRO);
+      this.diagLine(`tx ${txHash.slice(0, 12)}…`);
       this.credits.addPack(pack, txHash, Date.now());
       this.onChange();
       this.render();   // reflect the new balance
       this.msg(t("store.purchased", { n: pack.credits }), true);
     } catch (e) {
       const reason = e instanceof PayError ? e.reason : "failed";
-      if (reason === "wrong-chain") { this.showSwitch(pack); return; }
       const raw = e instanceof Error ? e.message : String(e ?? "");
+      this.diagLine(`✗ ${reason}: ${raw.slice(0, 100)}`);
+      if (reason === "wrong-chain") { this.showSwitch(pack); return; }
       const rejectedConnect = !(e instanceof PayError) && /reject|denied|refus|cancel|annul|close|4001/i.test(raw);
       this.msg(
         reason === "rejected" || rejectedConnect ? t("bigbang.errRejected")
+        : reason === "timeout"     ? t("store.errTimeout")
         : reason === "funds"       ? t("store.errFunds", { n: this.cro(pack.priceCRO) })
         : reason === "no-wallet"   ? t("bigbang.errNoWallet")
         : t("bigbang.errGeneric", { reason: raw.slice(0, 120) || "?" }),
@@ -141,8 +171,9 @@ export class BigBangStore {
     const btn = m.querySelector("#bbsSwitchBtn") as HTMLButtonElement;
     btn.addEventListener("click", async () => {
       btn.disabled = true; btn.textContent = t("store.switching");
-      const ok = await this.wallet.ensureCronos();
-      if (ok) { this.buy(pack.id); }                 // switched → retry the purchase
+      const prep = await this.wallet.prepareCronos();
+      if (prep === "ok") { this.buy(pack.id); }               // on Cronos → retry the purchase
+      else if (prep === "reconnect") { this.showReconnect(pack); } // session lacks Cronos → re-pair
       else { btn.disabled = false; btn.textContent = t("store.switchBtn"); } // manual steps stay
     });
   }
@@ -234,6 +265,10 @@ export class BigBangStore {
     .bbsSwitchBtn:active{transform:scale(.97)}
     .bbsSwitchBtn:disabled{opacity:.6;cursor:default}
     .bbsSwitchManual{font-size:10.5px;font-weight:500;line-height:1.5;color:#c4cbe8;max-width:300px}
+    .bbsDiag{margin-top:12px;padding:10px;border-radius:10px;background:rgba(6,10,26,.7);border:1px solid rgba(120,140,220,.25);
+      color:#9fe6c8;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:9.5px;line-height:1.5;
+      white-space:pre-wrap;word-break:break-all;text-align:left;max-height:180px;overflow-y:auto}
+    .bbsDiag:empty{display:none}
     @media (prefers-reduced-motion: reduce){.bbsOverlay,.bbsSheet{animation:none}}
     `;
     document.head.appendChild(s);

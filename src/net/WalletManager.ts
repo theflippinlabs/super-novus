@@ -206,27 +206,83 @@ export class WalletManager {
     return this.chainId === SUPPORTED_CHAIN_ID;
   }
 
-  /** True if the active WalletConnect session actually includes Cronos (eip155:25).
-      A session paired BEFORE Cronos was required is scoped to another chain, so a
-      Cronos `eth_sendTransaction` is silently dropped by the wallet (no prompt).
-      Returns true for injected wallets (not applicable) and, defensively, when the
-      session can't be inspected — so we never force a needless reconnect. */
-  hasCronosSession(): boolean {
-    if (!this.wc || this.provider !== this.wc) return true; // injected / n.a.
-    try {
-      const s = (this.wc as unknown as { session?: { namespaces?: Record<string, { chains?: string[]; accounts?: string[] }> } }).session;
-      const eip = s?.namespaces?.eip155;
-      if (!eip) return false;
-      const hit = (arr?: string[]) => Array.isArray(arr) && arr.some((x) => x === "eip155:25" || x.startsWith("eip155:25:"));
-      return hit(eip.chains) || hit(eip.accounts);
-    } catch { return true; }
-  }
-
   /** Tear down the current session and pair a fresh one (which is Cronos-scoped).
       Used when the restored session predates Cronos support so payments surface. */
   async reconnect(): Promise<string> {
     try { await this.disconnect(); } catch { /* ignore */ }
     return this.connect();
+  }
+
+  /** Prepare the wallet for a Cronos payment and report exactly what to do next.
+
+      Uses `wallet_switchEthereumChain` as an AUTHORITATIVE probe. For a
+      WalletConnect session the underlying provider (`handleSwitchChain`) does:
+        • Cronos (eip155:25) IS in the session  → a purely LOCAL default-chain
+          switch (no wallet round-trip, no deep-link) that ALSO makes the provider
+          route the next `eth_sendTransaction` on eip155:25. Without this, requests
+          are published on the provider's default chain (often eip155:1) and the
+          wallet SILENTLY ignores a request for a chain not in its session — which
+          is why the payment prompt never appeared while score signing (chain-
+          agnostic personal_sign) worked.
+        • Cronos NOT in the session → it throws "chain is not approved". That is our
+          reliable signal that the session predates Cronos and must be re-paired.
+
+      Returns:
+        "ok"        → on Cronos and correctly routed; safe to pay.
+        "reconnect" → session has no Cronos; caller should offer a one-tap reconnect.
+        "switch"    → couldn't reach Cronos (injected wallet on the wrong network,
+                      or the user declined); caller shows the manual Switch prompt. */
+  async prepareCronos(): Promise<"ok" | "reconnect" | "switch"> {
+    if (!this.provider) return "switch";
+    const isWc = Boolean(this.wc) && this.provider === this.wc;
+    try {
+      await this.provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CRONOS_PARAMS.chainId }] });
+      this.chainId = SUPPORTED_CHAIN_ID;
+      this.emit();
+      return "ok";
+    } catch (e) {
+      const code = (e as { code?: number })?.code;
+      const msg = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
+      // Injected wallet that doesn't know Cronos yet → add it, then we're on Cronos.
+      if (code === 4902 || /unrecognized chain|add ethereum chain|chain.*not.*added/.test(msg)) {
+        try {
+          await this.provider.request({ method: "wallet_addEthereumChain", params: [CRONOS_PARAMS] });
+          this.chainId = SUPPORTED_CHAIN_ID;
+          this.emit();
+          return "ok";
+        } catch { return "switch"; }
+      }
+      // WalletConnect session simply doesn't include Cronos → must re-pair.
+      if (isWc && /not approved|not configured|does not support|unsupported|invalid chain/.test(msg))
+        return "reconnect";
+      // User declined the switch, or a transient error — re-read and decide.
+      await this.refreshChain();
+      if (this.chainId === SUPPORTED_CHAIN_ID) return "ok";
+      return isWc ? "reconnect" : "switch";
+    }
+  }
+
+  /** Read-only snapshot for on-device diagnostics (?diag=1). Exposes the exact
+      approved session chains/accounts and the routing chain so a wrong-chain /
+      stale-session payment failure is visible instead of a silent black box. */
+  diag(): { kind: string; chainId: number | null; chains: string[]; accounts: string[] } {
+    const isWc = Boolean(this.wc) && this.provider === this.wc;
+    let chains: string[] = [];
+    let accounts: string[] = [];
+    if (isWc) {
+      try {
+        const eip = (this.wc as unknown as { session?: { namespaces?: Record<string, { chains?: string[]; accounts?: string[] }> } })
+          .session?.namespaces?.eip155;
+        chains = eip?.chains ?? [];
+        accounts = eip?.accounts ?? [];
+      } catch { /* ignore */ }
+    }
+    return {
+      kind: this.provider ? (isWc ? "walletconnect" : "injected") : "none",
+      chainId: this.chainId,
+      chains,
+      accounts,
+    };
   }
 
   /** Read the active chain. Prefers the WalletConnect session's own chainId — a
@@ -304,12 +360,22 @@ export class WalletManager {
     const valueWei = BigInt(Math.trunc(croAmount)) * (10n ** 18n);
     const valueHex = "0x" + valueWei.toString(16);
     try {
-      const hash = await this.provider.request({
+      // A wallet that receives a request for a chain not in its session drops it
+      // WITHOUT ever responding — the promise would then hang forever and the UI
+      // would sit on "Processing…". Race a timeout so we can surface a clear,
+      // actionable message instead of an infinite spinner. `data:"0x"` is included
+      // because a few wallets refuse to build a native transfer without it.
+      const req = this.provider.request({
         method: "eth_sendTransaction",
-        params: [{ from: this.address, to, value: valueHex }],
+        params: [{ from: this.address, to, value: valueHex, data: "0x" }],
       });
+      const hash = await Promise.race([
+        req,
+        new Promise((_, rej) => setTimeout(() => rej(new PayError("timeout", "Aucune réponse du wallet")), 90_000)),
+      ]);
       return String(hash);
     } catch (e) {
+      if (e instanceof PayError) throw e;
       const code = (e as { code?: number })?.code;
       const msg = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
       if (code === 4001 || /reject|denied|refus|cancel|annul|user rejected/.test(msg))
@@ -339,7 +405,7 @@ export function shortAddr(a: string): string {
 }
 
 /** Payment failure with a stable machine-readable reason so the UI can localize. */
-export type PayReason = "no-wallet" | "wrong-chain" | "rejected" | "funds" | "failed";
+export type PayReason = "no-wallet" | "wrong-chain" | "rejected" | "funds" | "failed" | "timeout";
 export class PayError extends Error {
   constructor(public reason: PayReason, message: string) { super(message); this.name = "PayError"; }
 }

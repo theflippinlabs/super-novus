@@ -78,6 +78,7 @@
   "store.processing": "결제 처리 중…",
   "store.purchased": "✓ +{n} 빅뱅이 계정에 추가되었습니다!",
   "store.errFunds": "CRO 잔액 부족 — Cronos에 {n} CRO(+수수료)가 필요합니다.",
+  "store.errTimeout": "지갑에 결제 요청이 나타나지 않았습니다. Cronos에서 지갑을 다시 열거나 다시 연결을 누른 후 구매를 다시 시도하세요.",
   "store.switchTitle": "지갑이 Cronos 네트워크에 연결되어 있지 않습니다",
   "store.switchBtn": "Cronos로 전환",
   "store.switching": "전환 중…",
