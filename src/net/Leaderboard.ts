@@ -77,6 +77,28 @@ export class Leaderboard {
   /** Drop the device authorization (used when the wallet disconnects / switches). */
   clearDeviceAuthorization(): void { this.device.clearDelegation(); }
 
+  /** Obtain the ONE-TIME device authorization NOW — meant to run right after the
+      wallet connects (landing page), while the wallet is still foregrounded, so
+      that saving a score afterwards NEVER prompts. Returns true if this device is
+      authorized (already, or freshly). Never throws: on failure/refusal the lazy
+      path in submit() will try again at save time. */
+  async ensureDeviceAuthorization(): Promise<boolean> {
+    const address = this.wallet.getAddress();
+    if (!address) return false;
+    if (this.device.getValid(address)) return true;   // already authorized — silent
+    const exp = Date.now() + DELEGATION_TTL_MS;
+    const authMsg = delegationMessage(address, this.device.deviceAddress(), exp);
+    try {
+      const sig = await this.wallet.signMessage(authMsg);
+      this.device.save({ wallet: address.toLowerCase(), device: this.device.deviceAddress().toLowerCase(), exp, sig });
+      console.info(`${LOG} device authorized at connect for ${shortAddr(address)} — saves are now silent.`);
+      return true;
+    } catch (e) {
+      console.warn(`${LOG} connect-time authorization skipped (will retry at save):`, e);
+      return false;
+    }
+  }
+
   private get envUrl(): string { return (import.meta.env.VITE_SUPABASE_URL as string | undefined) || SUPABASE_URL_DEFAULT; }
   private get envKey(): string { return (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || SUPABASE_ANON_KEY_DEFAULT; }
 

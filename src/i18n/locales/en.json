@@ -150,6 +150,10 @@
   "wallet.noConfig": "Wallet not configured (VITE_WC_PROJECT_ID missing and no injected wallet) — guest mode available.",
   "wallet.guestNote": "Without connecting, your score won't be added to the leaderboard.",
   "wallet.rankedNote": "Your best score will be saved to the public leaderboard.",
+  "wallet.authorizing": "Activating leaderboard…",
+  "wallet.authOpen": "👉 Open wallet to confirm (one time)",
+  "wallet.authWait": "Open your wallet and confirm once, then come back.",
+  "wallet.authReady": "Wallet ready ✓ — your scores post automatically.",
   "wallet.otherNet": "Network other than Cronos — score signing still works.",
 
   "controls.title": "CONTROLS",
