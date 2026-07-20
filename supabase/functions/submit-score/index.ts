@@ -97,7 +97,7 @@ Deno.serve(async (req) => {
   let body: any;
   try { body = await req.json(); } catch { return json({ error: "bad json" }, 400); }
 
-  const { wallet, score, dist, dust, ts, signature } = body ?? {};
+  const { wallet, score, dist, dust, ts, signature, delegation } = body ?? {};
   // Big Bang count is informational (not part of the signed message); clamp it.
   const bigBangs = Math.max(0, Math.min(3, Math.floor(Number((body ?? {}).bigbangs) || 0)));
   if (typeof wallet !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(wallet))
@@ -114,12 +114,43 @@ Deno.serve(async (req) => {
   if (dist > MAX_DIST) return json({ error: "dist bound" }, 400);
   if (score > dist * 3 + dust * 150 + 5000) return json({ error: "score bound" }, 400);
 
-  // 3) signature must match wallet (EOA or smart-contract wallet)
+  // 3) authenticity. TWO accepted proofs:
+  //    (A) Delegated device key — the wallet signed ONCE to authorize a local device
+  //        key; each score is then signed by that device key. This is the default
+  //        path (no wallet popup per save). We verify the wallet→device delegation
+  //        AND that the score was signed by the delegated device.
+  //    (B) Legacy direct path — the wallet itself signed the score message. Kept for
+  //        backward compatibility with older clients.
   const message = `SUPER NOVUS score:${score} dist:${dist} dust:${dust} ts:${ts}`;
-  const { valid, recovered } = await verifySignature(wallet, message, signature as `0x${string}`);
-  if (!valid) {
-    // Honest, specific error (public addresses only) — never a fake "JWT" problem.
-    return json({ error: "signature invalid", recovered: recovered || null, expected: wallet.toLowerCase() }, 401);
+  if (delegation && typeof delegation === "object") {
+    const device = String((delegation as any).device ?? "");
+    const exp = Number((delegation as any).exp);
+    const dsig = String((delegation as any).sig ?? "");
+    if (!/^0x[0-9a-fA-F]{40}$/.test(device)) return json({ error: "delegation device" }, 400);
+    if (!Number.isFinite(exp) || exp <= Date.now()) return json({ error: "signature invalid", detail: "delegation expired" }, 401);
+    // Reject absurdly long-lived tokens (hygiene) — ~200 days max.
+    if (exp - Date.now() > 200 * 24 * 60 * 60_000) return json({ error: "delegation exp too far" }, 400);
+    if (typeof dsig !== "string" || !dsig) return json({ error: "delegation sig" }, 400);
+
+    // 3a) the wallet authorized this device (EOA or smart-contract wallet).
+    const authMsg = `SUPER NOVUS authorize device ${device.toLowerCase()} for wallet ${String(wallet).toLowerCase()} until ${exp}`;
+    const auth = await verifySignature(wallet, authMsg, dsig as `0x${string}`);
+    if (!auth.valid) {
+      return json({ error: "signature invalid", detail: "bad delegation", recovered: auth.recovered || null, expected: String(wallet).toLowerCase() }, 401);
+    }
+    // 3b) the score was signed by the delegated device key (always an EOA).
+    let scoreSigner = "";
+    try { scoreSigner = (await recoverMessageAddress({ message, signature: signature as `0x${string}` })).toLowerCase(); }
+    catch (e) { console.error("device recover failed:", e); }
+    if (!scoreSigner || scoreSigner !== device.toLowerCase()) {
+      return json({ error: "signature invalid", detail: "device mismatch", recovered: scoreSigner || null, expected: device.toLowerCase() }, 401);
+    }
+  } else {
+    const { valid, recovered } = await verifySignature(wallet, message, signature as `0x${string}`);
+    if (!valid) {
+      // Honest, specific error (public addresses only) — never a fake "JWT" problem.
+      return json({ error: "signature invalid", recovered: recovered || null, expected: wallet.toLowerCase() }, 401);
+    }
   }
 
   const supabase = createClient(
