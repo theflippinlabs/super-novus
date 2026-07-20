@@ -282,15 +282,17 @@ export class BigBangStore {
     m.className = "bbsMsg";
     m.innerHTML = `
       <div class="bbsSwitch">
-        <div class="bbsSwitchTitle">⚡ ${t("store.browserTitle")}</div>
-        <div class="bbsSwitchManual">${t("store.browserMsg")}</div>
-        <button class="bbsConfirmBtn" id="bbsCopyLink">${t("store.copyLink")}</button>
-        <div class="bbsPayAddr" style="color:#cdd6f5">${link.replace(/^https?:\/\//, "")}</div>
-        <div class="bbsBrowserSteps">${t("store.browserSteps")}</div>
+        <div class="bbsSwitchTitle">⚡ ${t("store.enableCronosTitle")}</div>
+        <div class="bbsSwitchManual">${t("store.enableCronosMsg")}</div>
+        ${pack ? `<button class="bbsConfirmBtn" id="bbsReconnectBtn">${t("store.reconnectCronosBtn")}</button>` : ""}
         <div class="bbsPayOr">${t("store.payOr")}</div>
+        <div class="bbsSwitchManual" style="opacity:.85">${t("store.browserAlt")}</div>
+        <button class="bbsReconnectLink" id="bbsCopyLink">${t("store.copyLink")}</button>
+        <div class="bbsPayAddr" style="color:#cdd6f5">${link.replace(/^https?:\/\//, "")}</div>
         ${pack ? `<button class="bbsReconnectLink" id="bbsPayDirect">${t("store.payManualLink")}</button>` : ""}
-        ${pack ? `<button class="bbsReconnectLink" id="bbsReconnectBtn">${t("store.reconnectBtn")}</button>` : ""}
       </div>`;
+    const re = m.querySelector("#bbsReconnectBtn") as HTMLButtonElement | null;
+    if (re && pack) re.addEventListener("click", () => this.attemptReconnect(pack, re));
     const copy = m.querySelector("#bbsCopyLink") as HTMLButtonElement;
     copy.addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(link); copy.textContent = t("store.copied"); }
@@ -298,8 +300,6 @@ export class BigBangStore {
     });
     const pay = m.querySelector("#bbsPayDirect") as HTMLButtonElement | null;
     if (pay && pack) pay.addEventListener("click", () => this.showManualPay(pack));
-    const re = m.querySelector("#bbsReconnectBtn") as HTMLButtonElement | null;
-    if (re && pack) re.addEventListener("click", () => this.attemptReconnect(pack, re));
     try { m.scrollIntoView({ block: "center", behavior: "smooth" }); } catch { /* ignore */ }
   }
 
@@ -388,7 +388,7 @@ export class BigBangStore {
     } catch (e) {
       this.logStep(`✗ reconnect: ${(e instanceof Error ? e.message : String(e)).slice(0, 100)}`);
       this.wallet.onLog = null;
-      btn.disabled = false; btn.textContent = t("store.reconnectBtn");
+      btn.disabled = false; btn.textContent = t("store.reconnectCronosBtn");
     }
   }
 
