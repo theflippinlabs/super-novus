@@ -202,6 +202,42 @@ export class WalletManager {
     }
   }
 
+  /** True when the page runs inside a wallet that injects an EIP-1193 provider
+      (e.g. Crypto.com Onchain's built-in dApp browser, MetaMask browser). In that
+      context we should ALWAYS use the injected provider, never WalletConnect —
+      it pays natively on Cronos with no relay and no chain-grant limitation. */
+  hasInjected(): boolean { return Boolean(this.injected); }
+
+  /** Force the wallet's own injected provider, tearing down any WalletConnect
+      session that may be shadowing it. This is the fix for "I'm inside my wallet's
+      browser but the game still uses WalletConnect": a restored WC session made
+      getAddress() non-null, so the injected provider was never picked up. Idempotent
+      when already on the injected provider. */
+  async connectDirect(): Promise<string> {
+    const inj = this.injected;
+    if (!inj) return this.connect();                       // no injected → normal path
+    if (this.provider === inj && this.address) {           // already direct
+      this.log(`connectDirect: already on injected ${shortAddr(this.address)}`);
+      return this.address;
+    }
+    // Drop a WalletConnect session that's masking the injected provider.
+    if (this.wc && this.provider === this.wc) {
+      this.log("connectDirect: dropping WalletConnect session to use the wallet directly");
+      try { await this.disconnect(); } catch { /* ignore */ }
+      this.wc = null;
+    }
+    const accounts = (await inj.request({ method: "eth_requestAccounts" })) as string[];
+    if (!accounts?.length) throw new Error("Aucun compte autorisé");
+    this.provider = inj;
+    this.address = accounts[0];
+    await this.refreshChain();
+    this.watch(inj);
+    this.emit();
+    this.log(`connectDirect: injected ${shortAddr(this.address)} chain=${this.chainId ?? "?"}`);
+    void this.switchToCronos(inj).then(() => this.emit());
+    return this.address;
+  }
+
   /** Lazily create (once) the WalletConnect v2 provider. */
   private async initWc(): Promise<WcProvider> {
     if (this.wc) return this.wc;
