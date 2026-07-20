@@ -24,6 +24,11 @@ const CORS = {
 
 const RATE_LIMIT_SECONDS = 30;
 const MAX_DIST = 200_000;
+// Absolute sanity ceilings (~hundreds× any real run). They do NOT make a client
+// score trustworthy, but they stop the absurd values that make the board pointless
+// and prevent int4 overflow (→ 500s) from an unbounded `dust` inflating `score`.
+const MAX_DUST = 500_000;
+const MAX_SCORE = 20_000_000;
 
 /** Monday 00:00 UTC of the week containing d, as YYYY-MM-DD. */
 function weekStartUTC(d: Date): string {
@@ -55,8 +60,12 @@ Deno.serve(async (req) => {
   // 1) timestamp within ±5 min
   if (Math.abs(Date.now() - ts) > 5 * 60_000) return json({ error: "stale ts" }, 400);
 
-  // 2) plausibility bounds
+  // 2) plausibility bounds — absolute ceilings first (dust was previously
+  //    unbounded, which let an attacker inflate the relative ceiling and overflow
+  //    the int4 score column), then the relative score/dist/dust relationship.
   if (dist > MAX_DIST) return json({ error: "dist bound" }, 400);
+  if (dust > MAX_DUST) return json({ error: "dust bound" }, 400);
+  if (score > MAX_SCORE) return json({ error: "score bound abs" }, 400);
   if (score > dist * 3 + dust * 150 + 5000) return json({ error: "score bound" }, 400);
 
   // 3) authenticity — NO wallet signature required.

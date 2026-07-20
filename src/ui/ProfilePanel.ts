@@ -64,7 +64,7 @@ export class ProfilePanel {
     const avatar = this.avatarSrc(row);
     this.el.innerHTML = `
       <div class="pfCard pfNarrow">
-        <img class="pfAvatarBig" src="${avatar}" alt="avatar">
+        <img class="pfAvatarBig" src="${esc(avatar)}" alt="avatar">
         <h2 class="pfH">${t("profile.chooseNickname")}</h2>
         <p class="pfMuted">${t("profile.chooseNicknameSub")}</p>
         <input id="pfNickIn" class="pfInput" maxlength="${NICKNAME_MAX}" placeholder="${t("profile.nickname")}" autocomplete="off">
@@ -163,7 +163,7 @@ export class ProfilePanel {
     const head = `
       <div class="pfHead">
         <div class="pfIdent">
-          <div class="pfAvatarWrap"><img class="pfAvatarBig" src="${avatar}" alt="avatar"><button id="pfAvatarBtn" class="pfAvatarEdit" aria-label="${t("profile.changeAvatar")}">✎</button></div>
+          <div class="pfAvatarWrap"><img class="pfAvatarBig" src="${esc(avatar)}" alt="avatar"><button id="pfAvatarBtn" class="pfAvatarEdit" aria-label="${t("profile.changeAvatar")}">✎</button></div>
           <div class="pfNameCol">
             <div class="pfName" id="pfName">${esc(name)}</div>
             <button id="pfEditNick" class="pfLink">${t("profile.editNickname")}</button>

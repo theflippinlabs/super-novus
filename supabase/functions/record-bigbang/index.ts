@@ -19,8 +19,10 @@ const CORS = {
 const TREASURY = (Deno.env.get("TREASURY_ADDRESS") ??
   "0x277B7CAD86D0f56Ae547533934dceA365ac7D7Bf").toLowerCase();
 const RPC_URL = Deno.env.get("CRONOS_RPC_URL") ?? "https://evm.cronos.org";
-// Valid Big Bang CRO amounts (#1=10, #2=20, #3=40) — reject anything else.
-const VALID_AMOUNTS = new Set([10, 20, 40]);
+// Valid Big Bang CRO amounts: à-la-carte revives (#1=10, #2=20, #3=40) AND the
+// pre-paid packs (star=180, asteroid=550, supernova=1500). Pack purchases were
+// previously rejected, so their revenue never reached the pool / the accounts.
+const VALID_AMOUNTS = new Set([10, 20, 40, 180, 550, 1500]);
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response("ok", { headers: CORS });
@@ -46,6 +48,13 @@ Deno.serve(async (req) => {
   const expected = BigInt(amount) * (10n ** 18n);
   if (value !== expected) return json({ error: "amount mismatch" }, 422);
 
+  // Require the tx to be MINED and SUCCESSFUL. A pending tx can be replaced
+  // (same nonce, higher gas) so it never actually pays — recording it would
+  // inflate revenue with money that never arrived. Gate on the receipt.
+  const receipt = await getReceipt(tx_hash);
+  if (!receipt || receipt.blockNumber == null) return json({ error: "tx not confirmed yet — retry" }, 503);
+  if (String(receipt.status).toLowerCase() !== "0x1") return json({ error: "tx failed on-chain" }, 422);
+
   // --- record (idempotent on tx_hash), month computed server-side in UTC ---
   const now = new Date();
   const periodMonth = `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, "0")}-01`;
@@ -63,14 +72,17 @@ Deno.serve(async (req) => {
 });
 
 // eth_getTransactionByHash with a few retries to absorb RPC propagation delay.
-// Works for pending and mined txs (both carry to/from/value).
-async function getTx(hash: string): Promise<any | null> {
+async function getTx(hash: string): Promise<any | null> { return rpcResult("eth_getTransactionByHash", hash); }
+// eth_getTransactionReceipt — null until the tx is mined (used to confirm success).
+async function getReceipt(hash: string): Promise<any | null> { return rpcResult("eth_getTransactionReceipt", hash); }
+
+async function rpcResult(method: string, hash: string): Promise<any | null> {
   for (let i = 0; i < 3; i++) {
     try {
       const r = await fetch(RPC_URL, {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method: "eth_getTransactionByHash", params: [hash] }),
+        body: JSON.stringify({ jsonrpc: "2.0", id: 1, method, params: [hash] }),
       });
       const j = await r.json();
       if (j?.result) return j.result;

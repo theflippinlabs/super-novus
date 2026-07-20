@@ -24,6 +24,7 @@ import { WalletManager, PayError } from "../net/WalletManager";
 import { Leaderboard } from "../net/Leaderboard";
 import { PrizePool } from "../net/PrizePool";
 import { Payouts } from "../net/Payouts";
+import { Accounting } from "../net/Accounting";
 import { AdminPanel } from "../ui/AdminPanel";
 import { Profile } from "../net/Profile";
 import { ProfilePanel } from "../ui/ProfilePanel";
@@ -100,7 +101,7 @@ export class GameEngine {
     // Owner prize-payout console (?admin=1) — zero cost otherwise.
     if (new URLSearchParams(location.search).get("admin") === "1"){
       this.payouts = new Payouts(this.wallet, this.prizePool);
-      this.admin = new AdminPanel(this.payouts, this.wallet, this.prizePool, this.leaderboard);
+      this.admin = new AdminPanel(this.payouts, this.wallet, this.prizePool, this.leaderboard, new Accounting(this.prizePool));
     }
     // Big Bang Packs — buy credits in advance; revives then consume them instantly.
     this.credits = new BigBangCredits(this.wallet);
