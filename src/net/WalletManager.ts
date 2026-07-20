@@ -244,13 +244,16 @@ export class WalletManager {
     const { EthereumProvider } = await import("@walletconnect/ethereum-provider");
     this.wc = (await EthereumProvider.init({
       projectId: this.projectId,
-      // SUPER NOVUS is a Cronos game (Big Bang is paid in native CRO on Cronos),
-      // so require Cronos in the session — this guarantees eth_sendTransaction is
-      // approved for chain 25 and the CRO payment never fails on a chain mismatch.
-      // Ethereum mainnet stays optional for broad wallet support; score signing
-      // (personal_sign) works on any chain regardless.
-      chains: [SUPPORTED_CHAIN_ID],
-      optionalChains: [1, ...OPTIONAL_CHAIN_IDS] as unknown as [number, ...number[]],
+      // WalletConnect v2 best practice: require only a universally-supported chain
+      // (Ethereum) and request Cronos as OPTIONAL. Some wallets — notably Crypto.com
+      // Onchain — degrade a REQUIRED chain they don't currently expose down to a
+      // mainnet-only session (approved=[eip155:1]), which makes the Cronos payment
+      // impossible. As an optional chain, the wallet is far more likely to include
+      // Cronos (eip155:25) when it can, so eth_sendTransaction can route there and
+      // the CRO payment surfaces over WalletConnect. Score signing (personal_sign)
+      // is chain-agnostic and works regardless.
+      chains: [1],
+      optionalChains: [SUPPORTED_CHAIN_ID, ...OPTIONAL_CHAIN_IDS] as unknown as [number, ...number[]],
       showQrModal: true,
       metadata: {
         name: "SUPER NOVUS",
