@@ -155,6 +155,9 @@ export class BigBangStore {
     // Stream every WalletManager step (connect, chainId, payload, request, response)
     // into the on-device log.
     this.wallet.onLog = (m) => this.logStep(m);
+    // When the tx request is published, WalletConnect on iOS won't foreground the
+    // wallet by itself — show a tappable button so a fresh user gesture opens it.
+    this.wallet.onRequestSent = (url) => this.showConfirmButton(url);
     try {
       // 1) Connect on demand (explicit user action — no silent deep link).
       if (!this.wallet.getAddress()) { this.logStep("· not connected → connecting"); await this.wallet.connect(); }
@@ -197,8 +200,27 @@ export class BigBangStore {
       btns.forEach((b) => (b.disabled = false));
     } finally {
       this.wallet.onLog = null;
+      this.wallet.onRequestSent = null;
       this.busy = false;
     }
+  }
+
+  /** The transaction has been published but iOS WalletConnect won't foreground the
+      wallet for a session request. Show a prominent, tappable link — a real anchor
+      to the wallet's deep-link, so the tap is a genuine user gesture iOS honors —
+      that brings the wallet up to display the pending confirmation. */
+  private showConfirmButton(url: string | null): void {
+    const m = this.el.querySelector("#bbsMsg") as HTMLElement | null;
+    if (!m) return;
+    m.className = "bbsMsg";
+    m.innerHTML = `
+      <div class="bbsConfirm">
+        <div class="bbsConfirmText">${t("store.awaitingConfirm")}</div>
+        ${url
+          ? `<a class="bbsConfirmBtn" id="bbsOpenWallet" href="${url}" rel="noopener">${t("store.openWallet")}</a>`
+          : `<div class="bbsSwitchManual">${t("store.openWalletManual")}</div>`}
+      </div>`;
+    try { m.scrollIntoView({ block: "center", behavior: "smooth" }); } catch { /* ignore */ }
   }
 
   /** Not on Cronos: offer a one-tap switch, and explain how to do it manually if
@@ -342,6 +364,17 @@ export class BigBangStore {
     .bbsSwitchBtn:active{transform:scale(.97)}
     .bbsSwitchBtn:disabled{opacity:.6;cursor:default}
     .bbsSwitchManual{font-size:10.5px;font-weight:500;line-height:1.5;color:#c4cbe8;max-width:300px}
+    .bbsConfirm{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:14px;padding:18px 16px;
+      border-radius:16px;background:radial-gradient(120% 100% at 50% 0%, rgba(120,90,255,.25), transparent 65%),rgba(40,30,90,.5);
+      border:1px solid rgba(150,170,255,.4)}
+    .bbsConfirmText{font-size:12.5px;font-weight:700;color:#dbe3ff;letter-spacing:.2px;text-align:center;line-height:1.4}
+    .bbsConfirmBtn{display:block;width:100%;box-sizing:border-box;text-align:center;text-decoration:none;
+      font-family:inherit;font-weight:800;font-size:15px;letter-spacing:.6px;color:#fff;padding:16px;border-radius:14px;
+      background:linear-gradient(180deg,#6f7bff,#4b3adf 60%,#3a2ad0);border:1px solid rgba(170,185,255,.6);
+      box-shadow:0 10px 26px rgba(70,55,200,.5), inset 0 1px 0 rgba(255,255,255,.18);animation:bbsPulse 1.6s ease-in-out infinite}
+    .bbsConfirmBtn:active{transform:scale(.98)}
+    @keyframes bbsPulse{0%,100%{box-shadow:0 10px 26px rgba(70,55,200,.5), inset 0 1px 0 rgba(255,255,255,.18)}
+      50%{box-shadow:0 10px 34px rgba(120,100,255,.85), inset 0 1px 0 rgba(255,255,255,.25)}}
     .bbsLogWrap{margin-top:14px;border-radius:12px;overflow:hidden;border:1px solid rgba(120,140,220,.25);background:rgba(6,10,26,.7)}
     .bbsLogHead{font-size:9.5px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#8ea2d8;
       padding:8px 12px;background:rgba(20,28,60,.55);border-bottom:1px solid rgba(120,140,220,.18)}
