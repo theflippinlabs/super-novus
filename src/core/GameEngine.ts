@@ -232,33 +232,10 @@ export class GameEngine {
   /** After an explicit connect: show identity, and prompt for a nickname if none. */
   async _afterConnect(){
     await this._refreshIdentity();
-    // Authorize this device for the leaderboard RIGHT NOW, while the wallet is still
-    // foregrounded from the connection. This is the single, one-time signature —
-    // folded into "Connect Wallet" — so saving a score later never prompts again.
-    await this._authorizeLeaderboard();
     const addr = this.wallet.getAddress();
     if (!addr || !this.profile.available) return;
     const row = await this.profile.get();
     if (!row || !row.nickname) this.profilePanel.openNicknameSetup();
-  }
-
-  /** Fold the one-time leaderboard authorization into the connect flow. Non-blocking:
-      if the wallet declines or the prompt is missed, the save path still asks later. */
-  async _authorizeLeaderboard(){
-    if (!this.leaderboard.available || this.leaderboard.hasDeviceAuthorization()) return;
-    const ws = this.ui.walletState;
-    // On WalletConnect the sign prompt may not auto-foreground the wallet — offer a
-    // tappable link (the wallet is usually already open right after connecting).
-    this.wallet.onRequestSent = (url: string | null) => {
-      if (url) ws.innerHTML = `<a href="${url}" rel="noopener" style="color:#9db8ff;font-weight:800;text-decoration:underline">${i18n.t("wallet.authOpen")}</a>`;
-      else ws.textContent = i18n.t("wallet.authWait");
-    };
-    ws.textContent = i18n.t("wallet.authorizing");
-    try {
-      const ok = await this.leaderboard.ensureDeviceAuthorization();
-      if (ok) ws.textContent = i18n.t("wallet.authReady");
-    } catch { /* non-blocking — lazy fallback at save time */ }
-    finally { this.wallet.onRequestSent = null; }
   }
 
   _bindInput(){
@@ -680,25 +657,11 @@ export class GameEngine {
         return;
       }
     }
-    // The wallet is only ever asked to sign ONCE — a one-time "activation" that
-    // authorizes this device. Every future save is silent. Tell the player exactly
-    // that, so the single popup doesn't read like "sign every time".
-    this.leaderboard.onAuthorizing = () => {
-      btn.textContent = i18n.t("gameover.activating");
-      ss.textContent = i18n.t("gameover.activateOnce"); ss.className = "";
-    };
-    // Signing over WalletConnect on iOS won't foreground the wallet by itself —
-    // show a tappable "open wallet" prompt so the player can approve the one-time
-    // activation. (Only fires during that single authorization, never on saves.)
-    this.wallet.onRequestSent = (url: string | null) => {
-      if (url) ss.innerHTML = `<a href="${url}" rel="noopener" style="color:#9db8ff;font-weight:800;text-decoration:underline">${i18n.t("gameover.signOpen")}</a>`;
-      else ss.textContent = i18n.t("gameover.signWait");
-      ss.className = "";
-    };
+    // Saving no longer touches the wallet — the score posts with the connected
+    // address, instantly. (The wallet signature path was removed because the
+    // WalletConnect sign prompt never surfaced in the wallet on mobile.)
     const r = this._pendingRun;
-    let ok = false;
-    try { ok = await this.leaderboard.submit(r.score, r.dist, r.dust, r.bigBangs); }
-    finally { this.wallet.onRequestSent = null; this.leaderboard.onAuthorizing = null; }
+    const ok = await this.leaderboard.submit(r.score, r.dist, r.dust, r.bigBangs);
     if (ok){
       ss.textContent = i18n.t("gameover.saved"); ss.className = "ok";
       btn.style.display = "none";
