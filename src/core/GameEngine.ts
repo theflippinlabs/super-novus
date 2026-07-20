@@ -3,6 +3,7 @@
    Adapted: wallet/guest menu wiring, offline-first local best. */
 import * as THREE from "three";
 import { rand, clamp, reduceMotion } from "./util";
+import { TEX } from "./textures";
 import { CFG } from "./legacyCfg";
 import { AudioManager } from "../audio/AudioManager";
 import { MusicManager } from "../audio/MusicManager";
@@ -494,16 +495,30 @@ export class GameEngine {
     this.scene.add(sph);
     this._novaSphere = {mesh:sph, t:0};
 
+    // Second, faster outer shock ring — a layered supernova wave.
+    const ring2 = new THREE.Mesh(new THREE.TorusGeometry(1, 0.26, 10, 64),
+      new THREE.MeshBasicMaterial({color:0x9fd0ff, transparent:true, opacity:0.9, blending:THREE.AdditiveBlending, depthWrite:false}));
+    ring2.position.copy(p); ring2.rotation.copy(ring.rotation);
+    this.scene.add(ring2);
+    this._novaRing2 = {mesh:ring2, t:0};
+
+    // Blinding core flash — a quick bright pop that expands and fades fast.
+    const flash = new THREE.Sprite(new THREE.SpriteMaterial({map:TEX.star, color:0xffffff, transparent:true, opacity:0.98, depthWrite:false, blending:THREE.AdditiveBlending}));
+    flash.position.copy(p); flash.scale.setScalar(7);
+    this.scene.add(flash);
+    this._novaFlash = {mesh:flash, t:0};
+
     // Exposure boost 1.15 → 1.6 → 1.15 over 600ms.
     this._novaExpoT = 0;
     // FOV punch +10 with elastic return + camera shake.
     this.fovPunch = FOV_NOVA_PUNCH;
     this._fovPunchT = 0;
-    this.shake = Math.max(this.shake, 1.2);
+    this.shake = Math.max(this.shake, 1.4);
 
-    // 80+ golden particles through the existing pool.
-    this.particles.burst(p, 90, 42, 3, 0xffe0a0, 1);
-    this.particles.burst(p, 44, 26, 1.8, 0xffffff, 1);
+    // A denser supernova burst — blue-white core, white sparks and cyan embers.
+    this.particles.burst(p, 130, 48, 3.2, 0xcfe6ff, 1);
+    this.particles.burst(p, 70, 30, 2.0, 0xffffff, 1);
+    this.particles.burst(p, 54, 22, 1.4, 0x9fe0ff, 1);
     this.audio.boom(true);
     if (navigator.vibrate) navigator.vibrate([40, 20, 60]);
 
@@ -531,6 +546,8 @@ export class GameEngine {
 
   _clearNovaFx(){
     if (this._novaRing){ this.scene.remove(this._novaRing.mesh); this._novaRing = null; }
+    if (this._novaRing2){ this.scene.remove(this._novaRing2.mesh); this._novaRing2 = null; }
+    if (this._novaFlash){ this.scene.remove(this._novaFlash.mesh); this._novaFlash = null; }
     if (this._novaSphere){ this.scene.remove(this._novaSphere.mesh); this._novaSphere = null; }
     this._novaExpoT = null;
   }
@@ -921,10 +938,25 @@ export class GameEngine {
     if (this._novaRing){
       const r = this._novaRing;
       r.t += dt;
-      const s = 1 + r.t*90;
+      const s = 1 + r.t*112;
       r.mesh.scale.set(s, s, s);
-      r.mesh.material.opacity = Math.max(0, 1 - r.t*1.3);
-      if (r.t > 0.9){ this.scene.remove(r.mesh); this._novaRing = null; }
+      r.mesh.material.opacity = Math.max(0, 1 - r.t*0.95);   // longer light falloff
+      if (r.t > 1.1){ this.scene.remove(r.mesh); this._novaRing = null; }
+    }
+    if (this._novaRing2){
+      const r = this._novaRing2;
+      r.t += dt;
+      const s = 1 + r.t*168;                                  // faster, wider outer wave
+      r.mesh.scale.set(s, s, s);
+      r.mesh.material.opacity = Math.max(0, 0.9*(1 - r.t/1.0));
+      if (r.t > 1.0){ this.scene.remove(r.mesh); this._novaRing2 = null; }
+    }
+    if (this._novaFlash){
+      const r = this._novaFlash;
+      r.t += dt;
+      r.mesh.scale.setScalar(7 + r.t*120);
+      r.mesh.material.opacity = Math.max(0, 0.98*(1 - r.t/0.32));
+      if (r.t > 0.32){ this.scene.remove(r.mesh); this._novaFlash = null; }
     }
     if (this._novaSphere){
       const r = this._novaSphere;

@@ -14,10 +14,11 @@ export class Environment {
 
     /* --- nébuleuses très subtiles (4, faible opacité) --- */
     const nebs = [
-      [TEX.nebula(258, 292), 620, -120, 60, -340, .34],
-      [TEX.nebula(210, 245), 680, 180, -80, -390, .30],
-      [TEX.nebula(272, 305), 540, -220, -110, -320, .26],
-      [TEX.nebula(196, 226), 580, 90, 170, -370, .24],
+      [TEX.nebula(258, 292), 620, -120, 60, -340, .36],
+      [TEX.nebula(210, 245), 680, 180, -80, -390, .32],
+      [TEX.nebula(272, 305), 540, -220, -110, -320, .28],
+      [TEX.nebula(196, 226), 580, 90, 170, -370, .26],
+      [TEX.nebula(300, 338), 640, -40, -200, -360, .22],   // violet/magenta accent for colour depth
     ];
     for (const [t, s, x, y, z, o] of nebs){
       const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:t, transparent:true, opacity:o, depthWrite:false, blending:THREE.AdditiveBlending}));
@@ -27,7 +28,7 @@ export class Environment {
     }
 
     /* --- galaxies lointaines discrètes --- */
-    for (const [s, x, y, z, rot, o] of [[190, 230, 150, -440, .4, .5], [130, -270, -130, -420, -.7, .42], [90, 60, -220, -430, 1.1, .34]]){
+    for (const [s, x, y, z, rot, o] of [[190, 230, 150, -440, .4, .5], [130, -270, -130, -420, -.7, .42], [90, 60, -220, -430, 1.1, .34], [150, -130, 205, -455, .28, .3]]){
       const gal = new THREE.Sprite(new THREE.SpriteMaterial({map:TEX.galaxy, transparent:true, opacity:o, depthWrite:false, blending:THREE.AdditiveBlending, rotation:rot}));
       gal.scale.setScalar(s);
       gal.position.set(x, y, z);
@@ -65,10 +66,10 @@ export class Environment {
       g.setAttribute("color", new THREE.BufferAttribute(c,3));
       this.group.add(new THREE.Points(g, new THREE.PointsMaterial({vertexColors:true, size, sizeAttenuation:true, transparent:true, opacity:op, depthWrite:false})));
     };
-    // Cooler, blue/violet-leaning star field (a few warm accents removed).
-    mkStars(1700, 0.9, 330, [0xffffff, 0xdfe8ff, 0xcfe0ff, 0xe8f4ff], .95);
-    mkStars(900, 1.7, 270, [0xbdd4ff, 0xbfe0ff, 0xe6d8ff, 0xc8f0ff], .72);
-    mkStars(600, 0.55, 380, [0xffffff, 0xcfd8ee], .8);
+    // Cooler, blue/violet-leaning star field — denser for more depth (Points are cheap).
+    mkStars(2100, 0.9, 330, [0xffffff, 0xdfe8ff, 0xcfe0ff, 0xe8f4ff], .95);
+    mkStars(1100, 1.7, 270, [0xbdd4ff, 0xbfe0ff, 0xe6d8ff, 0xc8f0ff], .72);
+    mkStars(900, 0.5, 400, [0xffffff, 0xcfd8ee, 0xb9c6ee], .8);
 
     /* --- planètes de décor réalistes, distances variées --- */
     this.decor = [];
@@ -169,8 +170,10 @@ export class Environment {
     // Speed streaks: the near cosmic dust grows + brightens with velocity, so the
     // faster the run the stronger the sense of motion (visual only).
     const spd01 = Math.max(0, Math.min(1, (speed - CFG.baseSpeed) / (CFG.maxSpeed - CFG.baseSpeed)));
-    this.dustMat.size = 0.42 + spd01 * 0.55;
-    this.dustMat.opacity = 0.54 + spd01 * 0.2;
+    // Stronger streaks at speed — the faster the run, the more the dust stretches
+    // into passing light-lines for a real sense of hurtling through space.
+    this.dustMat.size = 0.42 + spd01 * spd01 * 1.0;
+    this.dustMat.opacity = 0.54 + spd01 * 0.32;
 
     if (running && player.pos.z < this.nextDecorZ){
       // Weighted composition: mostly open space, distant planets for depth,

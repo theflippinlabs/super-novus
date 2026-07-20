@@ -32,14 +32,25 @@ export class ObstacleManager {
     this.rockGeo = g;
     this.rockCount = 80;
     this.rocks = new THREE.InstancedMesh(g,
-      new THREE.MeshStandardMaterial({map:TEX.rock, roughness:.9, metalness:.08, emissive:0x0c0e18, emissiveIntensity:.55}),
+      // Slightly shinier + more metallic so the moving player light throws subtle,
+      // travelling specular highlights across nearby asteroids (dynamic reflections).
+      new THREE.MeshStandardMaterial({map:TEX.rock, roughness:.78, metalness:.24, emissive:0x0c0e18, emissiveIntensity:.55}),
       this.rockCount);
     this.rocks.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
     this.rocks.frustumCulled = false;
     scene.add(this.rocks);
     this.rockSlots = Array.from({length:this.rockCount}, () => ({
-      used:false, x:0, y:0, z:1e9, s:1, rx:0, ry:0, sx:0, sy:0, vx:0, vy:0
+      used:false, x:0, y:0, z:1e9, s:1, rx:0, ry:0, sx:0, sy:0, vx:0, vy:0, tintIdx:0
     }));
+    // Per-instance colour variety (tints the shared rock texture): neutral rock,
+    // warm iron-rich, icy blue, dark metallic, and pale grey. Purely visual.
+    this.rockTints = [
+      new THREE.Color(1.0, 1.0, 1.0),
+      new THREE.Color(1.0, 0.82, 0.62),
+      new THREE.Color(0.70, 0.86, 1.0),
+      new THREE.Color(0.58, 0.66, 0.80),
+      new THREE.Color(0.90, 0.90, 0.98),
+    ];
     this._dummy = new THREE.Object3D();
   }
 
@@ -58,7 +69,10 @@ export class ObstacleManager {
     slot.y = cy === null ? rr(rng, -CFG.fieldY, CFG.fieldY) : clamp(cy + rr(rng, -5,5), -CFG.fieldY, CFG.fieldY);
     slot.z = z + (cx === null ? 0 : rr(rng, -4,4));
     slot.rx = Math.random()*3; slot.ry = Math.random()*3;   // visual spin only
-    slot.sx = rand(-1,1); slot.sy = rand(-1,1);              // visual spin only
+    // Wider spin range so some asteroids tumble much faster than others.
+    const spin = 0.5 + Math.random()*1.9;                   // visual spin only
+    slot.sx = rand(-1,1)*spin; slot.sy = rand(-1,1)*spin;
+    slot.tintIdx = (Math.random()*this.rockTints.length)|0;  // visual rock "type"
     slot.vx = rr(rng, -2.5,2.5); slot.vy = rr(rng, -1.8,1.8);
     this.list.push({kind:"rock", slot, r:slot.s*0.8,
       get x(){return this.slot.x}, get y(){return this.slot.y}, get z(){return this.slot.z}});
@@ -170,9 +184,12 @@ export class ObstacleManager {
       this._dummy.rotation.set(s.rx, s.ry, 0);
       this._dummy.scale.setScalar(s.s || 1);
       this._dummy.updateMatrix();
-      this.rocks.setMatrixAt(mi++, this._dummy.matrix);
+      this.rocks.setMatrixAt(mi, this._dummy.matrix);
+      this.rocks.setColorAt(mi, this.rockTints[s.tintIdx | 0]);   // per-instance rock type
+      mi++;
     }
     this.rocks.instanceMatrix.needsUpdate = true;
+    if (this.rocks.instanceColor) this.rocks.instanceColor.needsUpdate = true;
 
     const cullZ = player.pos.z + 36;
     for (let i = this.list.length-1; i >= 0; i--){
