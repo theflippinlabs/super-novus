@@ -79,6 +79,8 @@
   "store.purchased": "✓ +{n} Big Bangs added to your account!",
   "store.errFunds": "Not enough CRO — you need {n} CRO (+ gas) on Cronos.",
   "store.errTimeout": "No payment request appeared in your wallet. Reopen your wallet on Cronos, or tap Reconnect, then try Buy again.",
+  "store.noCronosTitle": "This wallet can't pay on Cronos over WalletConnect",
+  "store.noCronosMsg": "Your wallet didn't grant Cronos to the connection, so the payment can't be routed. Open supernovus.fun inside your wallet's built-in browser (Crypto.com Onchain → Browser tab), then buy from there — the payment will appear normally.",
   "store.switchTitle": "Your wallet isn't on the Cronos network",
   "store.switchBtn": "Switch to Cronos",
   "store.switching": "Switching…",

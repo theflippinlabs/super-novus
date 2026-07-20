@@ -195,9 +195,37 @@ export class BigBangStore {
     const btn = m.querySelector("#bbsReconnectBtn") as HTMLButtonElement;
     btn.addEventListener("click", async () => {
       btn.disabled = true; btn.textContent = t("store.switching");
-      try { await this.wallet.reconnect(); this.buy(pack.id); }   // fresh Cronos session → retry
-      catch { btn.disabled = false; btn.textContent = t("store.reconnectBtn"); }
+      try {
+        await this.wallet.reconnect();
+        this.diagSnap("reconnected");
+        // Re-check the FRESH session ourselves (don't just call buy → it would loop
+        // straight back here if the wallet still won't grant Cronos over WC).
+        const prep = await this.wallet.prepareCronos();
+        this.diagLine(`post-reconnect prepareCronos → ${prep}`);
+        if (prep === "ok") { this.busy = false; this.buy(pack.id); }
+        else { this.showBrowserHint(); }   // even a fresh session lacks Cronos → dead-end over WC
+      } catch (e) {
+        this.diagLine(`✗ reconnect: ${(e instanceof Error ? e.message : String(e)).slice(0, 80)}`);
+        btn.disabled = false; btn.textContent = t("store.reconnectBtn");
+      }
     });
+  }
+
+  /** Terminal fallback: even a freshly paired session doesn't include Cronos, so
+      this wallet won't route a Cronos payment over WalletConnect. The reliable path
+      is to open the game inside the wallet's own in-app browser (injected provider),
+      where the transaction prompts natively with no relay. Honest, not a dead-end. */
+  private showBrowserHint(): void {
+    this.busy = false;
+    this.el.querySelectorAll<HTMLButtonElement>(".bbsBuy").forEach((b) => (b.disabled = false));
+    const m = this.el.querySelector("#bbsMsg") as HTMLElement | null;
+    if (!m) return;
+    m.className = "bbsMsg";
+    m.innerHTML = `
+      <div class="bbsSwitch">
+        <div class="bbsSwitchTitle">⚠ ${t("store.noCronosTitle")}</div>
+        <div class="bbsSwitchManual">${t("store.noCronosMsg")}</div>
+      </div>`;
   }
 
   private injectStyles(): void {

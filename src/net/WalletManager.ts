@@ -210,6 +210,11 @@ export class WalletManager {
       Used when the restored session predates Cronos support so payments surface. */
   async reconnect(): Promise<string> {
     try { await this.disconnect(); } catch { /* ignore */ }
+    // Drop the cached WalletConnect provider so initWc() builds a FRESH instance
+    // and pairs a brand-new session. Without this, connect() reuses the stale
+    // provider (and its old, possibly non-Cronos session), defeating the reconnect.
+    try { await (this.wc as unknown as { disconnect?: () => Promise<void> })?.disconnect?.(); } catch { /* ignore */ }
+    this.wc = null;
     return this.connect();
   }
 
@@ -235,6 +240,27 @@ export class WalletManager {
   async prepareCronos(): Promise<"ok" | "reconnect" | "switch"> {
     if (!this.provider) return "switch";
     const isWc = Boolean(this.wc) && this.provider === this.wc;
+
+    if (isWc) {
+      // Authoritative: read the APPROVED session chains directly. If Cronos isn't
+      // among them, the wallet never granted it — re-pair. We deliberately do NOT
+      // call wallet_switchEthereumChain in that case, because the SDK would then
+      // send the switch over the relay (a pointless second deep-link) and could
+      // still leave the tx routed on an un-approved chain that the wallet drops.
+      if (!this.sessionHasChain(SUPPORTED_CHAIN_ID)) return "reconnect";
+      // Cronos IS approved → a LOCAL default-chain switch (no wallet round-trip)
+      // so the next eth_sendTransaction is published on eip155:25, the chain the
+      // wallet actually has in its session, and the prompt finally appears.
+      try {
+        await this.provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CRONOS_PARAMS.chainId }] });
+      } catch { /* local switch is best-effort when the chain is already approved */ }
+      this.chainId = SUPPORTED_CHAIN_ID;
+      this.emit();
+      return "ok";
+    }
+
+    // Injected wallet (in-app dApp browser / extension): switch, adding Cronos if
+    // the wallet doesn't know it yet. This path prompts natively — no relay.
     try {
       await this.provider.request({ method: "wallet_switchEthereumChain", params: [{ chainId: CRONOS_PARAMS.chainId }] });
       this.chainId = SUPPORTED_CHAIN_ID;
@@ -243,7 +269,6 @@ export class WalletManager {
     } catch (e) {
       const code = (e as { code?: number })?.code;
       const msg = (e instanceof Error ? e.message : String(e ?? "")).toLowerCase();
-      // Injected wallet that doesn't know Cronos yet → add it, then we're on Cronos.
       if (code === 4902 || /unrecognized chain|add ethereum chain|chain.*not.*added/.test(msg)) {
         try {
           await this.provider.request({ method: "wallet_addEthereumChain", params: [CRONOS_PARAMS] });
@@ -252,14 +277,26 @@ export class WalletManager {
           return "ok";
         } catch { return "switch"; }
       }
-      // WalletConnect session simply doesn't include Cronos → must re-pair.
-      if (isWc && /not approved|not configured|does not support|unsupported|invalid chain/.test(msg))
-        return "reconnect";
-      // User declined the switch, or a transient error — re-read and decide.
       await this.refreshChain();
-      if (this.chainId === SUPPORTED_CHAIN_ID) return "ok";
-      return isWc ? "reconnect" : "switch";
+      return this.chainId === SUPPORTED_CHAIN_ID ? "ok" : "switch";
     }
+  }
+
+  /** True when the active WalletConnect session's approved eip155 namespace really
+      includes the given chain (as `eip155:<id>` in chains or accounts). Returns
+      false — not a defensive true — when absent or unparseable, so a session that
+      never granted Cronos is caught and re-paired instead of silently dropping the
+      payment. Only meaningful for a WalletConnect provider. */
+  private sessionHasChain(id: number): boolean {
+    if (!this.wc || this.provider !== this.wc) return true; // injected: n/a
+    try {
+      const eip = (this.wc as unknown as { session?: { namespaces?: Record<string, { chains?: string[]; accounts?: string[] }> } })
+        .session?.namespaces?.eip155;
+      if (!eip) return false;
+      const want = `eip155:${id}`;
+      const hit = (arr?: string[]) => Array.isArray(arr) && arr.some((x) => x === want || x.startsWith(`${want}:`));
+      return hit(eip.chains) || hit(eip.accounts);
+    } catch { return false; }
   }
 
   /** Read-only snapshot for on-device diagnostics (?diag=1). Exposes the exact
