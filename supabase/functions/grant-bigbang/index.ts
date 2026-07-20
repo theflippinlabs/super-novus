@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
   const { wallet, credits, note, secret } = body ?? {};
 
   const provided = (req.headers.get("x-admin-secret") ?? secret ?? "") as string;
-  if (provided !== ADMIN_SECRET) return json({ error: "unauthorized" }, 401);
+  if (!(await constantTimeEqual(provided, ADMIN_SECRET))) return json({ error: "unauthorized" }, 401);
 
   if (typeof wallet !== "string" || !/^0x[0-9a-fA-F]{40}$/.test(wallet)) return json({ error: "wallet" }, 400);
   const n = Math.floor(Number(credits));
@@ -45,6 +45,21 @@ Deno.serve(async (req) => {
 
   return json({ ok: true, id: data?.id, wallet: wallet.toLowerCase(), credits: n });
 });
+
+/** Constant-time secret comparison. Both sides are SHA-256 hashed first (fixed
+    32-byte length, so no length leak) and the digests compared with a branchless
+    XOR accumulator — avoids the timing side-channel of a plain `===` on secrets. */
+async function constantTimeEqual(a: string, b: string): Promise<boolean> {
+  const enc = new TextEncoder();
+  const [ha, hb] = await Promise.all([
+    crypto.subtle.digest("SHA-256", enc.encode(a)),
+    crypto.subtle.digest("SHA-256", enc.encode(b)),
+  ]);
+  const x = new Uint8Array(ha), y = new Uint8Array(hb);
+  let diff = 0;
+  for (let i = 0; i < x.length; i++) diff |= x[i] ^ y[i];
+  return diff === 0;
+}
 
 function json(obj: unknown, status = 200): Response {
   return new Response(JSON.stringify(obj), { status, headers: { ...CORS, "Content-Type": "application/json" } });
