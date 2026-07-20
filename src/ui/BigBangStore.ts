@@ -160,8 +160,18 @@ export class BigBangStore {
     // wallet by itself — show a tappable button so a fresh user gesture opens it.
     this.wallet.onRequestSent = (url) => this.showConfirmButton(url);
     try {
-      // 1) Connect on demand (explicit user action — no silent deep link).
-      if (!this.wallet.getAddress()) { this.logStep("· not connected → connecting"); await this.wallet.connect(); }
+      // 1) Connect. If the wallet injects a provider (we're inside its own dApp
+      // browser), ALWAYS use it directly — it pays natively on Cronos, unlike a
+      // WalletConnect session that may only grant Ethereum. Otherwise fall back to
+      // WalletConnect (Safari / external wallet).
+      this.logStep(`· injected provider present: ${this.wallet.hasInjected()}`);
+      if (this.wallet.hasInjected()) {
+        this.logStep("· using wallet's direct (injected) provider");
+        await this.wallet.connectDirect();
+      } else if (!this.wallet.getAddress()) {
+        this.logStep("· not connected → connecting (WalletConnect)");
+        await this.wallet.connect();
+      }
       const addr = this.wallet.getAddress();
       this.logStep(`✓ wallet connected: ${addr ? addr.slice(0, 6) + "…" + addr.slice(-4) : "none"}`);
       const d0 = this.wallet.diag();
