@@ -224,8 +224,11 @@ export class Leaderboard {
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       const code = (e as { code?: number })?.code;
+      const timedOut = /sign-timeout/.test(msg);
       const rejected = code === 4001 || /reject|denied|refus|cancel|annul/i.test(msg);
-      this.lastSubmitReason = rejected
+      this.lastSubmitReason = timedOut
+        ? "Le wallet n'a pas répondu — rouvre-le, signe le message, puis réessaie."
+        : rejected
         ? "Signature refusée dans le wallet"
         : `Signature impossible (wallet) : ${msg}`;
       this.lastError = this.lastSubmitReason;
@@ -233,9 +236,23 @@ export class Leaderboard {
       return false;
     }
 
-    const { data, error } = await this.client.functions.invoke("submit-score", {
+    // Guard the network call so a hung request can't leave the UI stuck on "Saving…".
+    const invoke = this.client.functions.invoke("submit-score", {
       body: { wallet: address, score, dist, dust, ts, signature, bigbangs: bigBangs },
     });
+    let data: any, error: any;
+    try {
+      ({ data, error } = await Promise.race([
+        invoke as Promise<{ data: any; error: any }>,
+        new Promise<never>((_, rej) => setTimeout(() => rej(new Error("invoke-timeout")), 30_000)),
+      ]));
+    } catch (e) {
+      this.lastSubmitReason = /invoke-timeout/.test(String(e))
+        ? "Serveur de scores injoignable (délai dépassé) — réessaie."
+        : `Réseau injoignable : ${e instanceof Error ? e.message : String(e)}`;
+      this.lastError = this.lastSubmitReason;
+      return false;
+    }
     if (error) {
       this.lastError = error.message;
       let detail = "";

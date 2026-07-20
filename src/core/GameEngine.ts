@@ -373,6 +373,24 @@ export class GameEngine {
       const on = this.music.toggle();
       this.ui.setMusicButton(on);
     });
+    this._armMusicAutostart();
+  }
+
+  /** Start the background music on the FIRST user interaction anywhere (browsers
+      block autoplay until a gesture, so it can't literally start before any touch).
+      From then it loops across the menu AND gameplay; the header / HUD button turns
+      it off. Honors the saved OFF preference (play() is a no-op when disabled). */
+  private _armMusicAutostart(): void {
+    const start = (): void => {
+      this.music.play();
+      this.ui.setMusicButton(this.music.isEnabled);
+      document.removeEventListener("pointerdown", start, true);
+      document.removeEventListener("touchstart", start, true);
+      document.removeEventListener("keydown", start, true);
+    };
+    document.addEventListener("pointerdown", start, true);
+    document.addEventListener("touchstart", start, true);
+    document.addEventListener("keydown", start, true);
   }
 
   start(){
@@ -622,8 +640,17 @@ export class GameEngine {
         return;
       }
     }
+    // Signing over WalletConnect on iOS won't foreground the wallet by itself —
+    // show a tappable "open wallet to sign" prompt so the user can approve it.
+    this.wallet.onRequestSent = (url: string | null) => {
+      if (url) ss.innerHTML = `<a href="${url}" rel="noopener" style="color:#9db8ff;font-weight:800;text-decoration:underline">${i18n.t("gameover.signOpen")}</a>`;
+      else ss.textContent = i18n.t("gameover.signWait");
+      ss.className = "";
+    };
     const r = this._pendingRun;
-    const ok = await this.leaderboard.submit(r.score, r.dist, r.dust, r.bigBangs);
+    let ok = false;
+    try { ok = await this.leaderboard.submit(r.score, r.dist, r.dust, r.bigBangs); }
+    finally { this.wallet.onRequestSent = null; }
     if (ok){
       ss.textContent = i18n.t("gameover.saved"); ss.className = "ok";
       btn.style.display = "none";
