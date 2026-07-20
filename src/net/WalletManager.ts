@@ -38,6 +38,26 @@ export class WalletManager {
   onLog: ((msg: string) => void) | null = null;
   private log(msg: string): void { try { this.onLog?.(msg); } catch { /* logging must never break the flow */ } }
 
+  /** Fired the moment a wallet request (eth_sendTransaction) has been published,
+      with the wallet's own deep-link target (or null). The UI uses it to show a
+      user-tappable "Open wallet to confirm" button — on iOS WalletConnect does NOT
+      auto-foreground the wallet for session requests, so without a fresh user
+      gesture the confirmation screen never appears. */
+  onRequestSent: ((redirect: string | null) => void) | null = null;
+
+  /** The wallet's deep-link URL taken from the live WC session's peer metadata
+      (the wallet advertises this at pairing time). Used to foreground the wallet
+      so it shows a pending request. Null for injected wallets or when absent. */
+  walletRedirect(): string | null {
+    if (!this.wc || this.provider !== this.wc) return null;
+    try {
+      const r = (this.wc as unknown as { session?: { peer?: { metadata?: { redirect?: { native?: string; universal?: string } } } } })
+        .session?.peer?.metadata?.redirect;
+      const url = (r?.native || r?.universal || "").trim();
+      return url || null;
+    } catch { return null; }
+  }
+
   get projectId(): string {
     const env = (import.meta.env.VITE_WC_PROJECT_ID as string | undefined) ?? "";
     return env || WC_PROJECT_ID_DEFAULT;
@@ -457,8 +477,15 @@ export class WalletManager {
       // would sit on "Processing…". Race a timeout so we can surface a clear,
       // actionable message instead of an infinite spinner. `data:"0x"` is included
       // because a few wallets refuse to build a native transfer without it.
-      this.log("payCRO: eth_sendTransaction sent → opening wallet, awaiting confirmation…");
+      const redirect = this.walletRedirect();
+      this.log(`payCRO: eth_sendTransaction sent (redirect=${redirect ?? "none"}) → awaiting confirmation…`);
       const req = this.provider.request({ method: "eth_sendTransaction", params: [tx] });
+      // iOS WalletConnect does NOT auto-foreground the wallet for a session request,
+      // so the confirmation screen never appears on its own. Tell the UI to show a
+      // tappable "Open wallet" button (a fresh user gesture reliably opens the app),
+      // and also make a best-effort auto-redirect in case the gesture is still live.
+      try { this.onRequestSent?.(redirect); } catch { /* ignore */ }
+      if (redirect) { try { window.location.href = redirect; } catch { /* blocked outside gesture — button covers it */ } }
       const hash = await Promise.race([
         req,
         new Promise((_, rej) => setTimeout(() => rej(new PayError("timeout", "Aucune réponse du wallet")), 90_000)),
