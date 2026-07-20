@@ -169,7 +169,12 @@ export class BigBangStore {
       // 2) Authoritative Cronos check (also fixes tx routing to eip155:25).
       const prep = await this.wallet.prepareCronos();
       this.logStep(`· prepareCronos → ${prep}`);
-      if (prep === "reconnect") { this.showReconnect(pack); return; }
+      // Session doesn't include Cronos. For WalletConnect wallets that simply don't
+      // expose Cronos (e.g. Crypto.com Onchain over WC grants only eip155:1), a
+      // re-pair can't fix it — so the reliable in-app-browser path is shown first,
+      // with a small secondary "reconnect" option for wallets that CAN grant Cronos
+      // on a fresh pairing.
+      if (prep === "reconnect") { this.showBrowserHint(pack); return; }
       if (prep === "switch") { this.showSwitch(pack); return; }
 
       // 3) Pay — payCRO logs session-readiness, payload, request, and response.
@@ -242,51 +247,17 @@ export class BigBangStore {
       btn.disabled = true; btn.textContent = t("store.switching");
       const prep = await this.wallet.prepareCronos();
       if (prep === "ok") { this.buy(pack.id); }               // on Cronos → retry the purchase
-      else if (prep === "reconnect") { this.showReconnect(pack); } // session lacks Cronos → re-pair
+      else if (prep === "reconnect") { this.showBrowserHint(pack); } // session lacks Cronos → browser path
       else { btn.disabled = false; btn.textContent = t("store.switchBtn"); } // manual steps stay
     });
   }
 
-  /** The wallet session predates Cronos support (payments would be dropped with no
-      prompt). Offer a one-tap reconnect that pairs a fresh, Cronos-scoped session. */
-  private showReconnect(pack: BigBangPack): void {
-    this.busy = false;
-    this.el.querySelectorAll<HTMLButtonElement>(".bbsBuy").forEach((b) => (b.disabled = false));
-    const m = this.el.querySelector("#bbsMsg") as HTMLElement | null;
-    if (!m) return;
-    m.className = "bbsMsg";
-    m.innerHTML = `
-      <div class="bbsSwitch">
-        <div class="bbsSwitchTitle">⚠ ${t("store.reconnectTitle")}</div>
-        <button class="bbsSwitchBtn" id="bbsReconnectBtn">${t("store.reconnectBtn")}</button>
-        <div class="bbsSwitchManual">${t("store.reconnectMsg")}</div>
-      </div>`;
-    const btn = m.querySelector("#bbsReconnectBtn") as HTMLButtonElement;
-    btn.addEventListener("click", async () => {
-      btn.disabled = true; btn.textContent = t("store.switching");
-      this.wallet.onLog = (m) => this.logStep(m);
-      try {
-        this.logStep("· reconnect: re-pairing a fresh session…");
-        await this.wallet.reconnect();
-        // Re-check the FRESH session ourselves (don't just call buy → it would loop
-        // straight back here if the wallet still won't grant Cronos over WC).
-        const prep = await this.wallet.prepareCronos();
-        this.logStep(`· post-reconnect prepareCronos → ${prep}`);
-        if (prep === "ok") { this.wallet.onLog = null; this.busy = false; this.buy(pack.id); }
-        else { this.wallet.onLog = null; this.showBrowserHint(); }   // fresh session still lacks Cronos
-      } catch (e) {
-        this.logStep(`✗ reconnect: ${(e instanceof Error ? e.message : String(e)).slice(0, 100)}`);
-        this.wallet.onLog = null;
-        btn.disabled = false; btn.textContent = t("store.reconnectBtn");
-      }
-    });
-  }
-
-  /** Terminal fallback: even a freshly paired session doesn't include Cronos, so
-      this wallet won't route a Cronos payment over WalletConnect. The reliable path
-      is to open the game inside the wallet's own in-app browser (injected provider),
-      where the transaction prompts natively with no relay. Honest, not a dead-end. */
-  private showBrowserHint(): void {
+  /** The active WalletConnect session doesn't include Cronos, so a CRO payment
+      can't be routed. The RELIABLE path (shown first) is to open the game inside
+      the wallet's own in-app browser — an injected provider that prompts natively
+      with no relay. A small secondary "reconnect" option remains for wallets that
+      CAN grant Cronos on a fresh pairing (Crypto.com Onchain over WC never does). */
+  private showBrowserHint(pack?: BigBangPack): void {
     this.busy = false;
     this.el.querySelectorAll<HTMLButtonElement>(".bbsBuy").forEach((b) => (b.disabled = false));
     const m = this.el.querySelector("#bbsMsg") as HTMLElement | null;
@@ -299,18 +270,35 @@ export class BigBangStore {
         <div class="bbsSwitchManual">${t("store.noCronosMsg")}</div>
         <button class="bbsSwitchBtn" id="bbsCopyLink">${t("store.copyLink")}</button>
         <div class="bbsSwitchManual" style="opacity:.85">${link.replace(/^https?:\/\//, "")}</div>
+        ${pack ? `<button class="bbsReconnectLink" id="bbsReconnectBtn">${t("store.reconnectBtn")}</button>` : ""}
       </div>`;
-    const btn = m.querySelector("#bbsCopyLink") as HTMLButtonElement;
-    btn.addEventListener("click", async () => {
-      try {
-        await navigator.clipboard.writeText(link);
-        btn.textContent = t("store.copied");
-      } catch {
-        // Clipboard blocked (older iOS / no permission): select-fallback isn't
-        // reliable here, so just reveal the URL for manual copy.
-        btn.textContent = link.replace(/^https?:\/\//, "");
-      }
+    const copy = m.querySelector("#bbsCopyLink") as HTMLButtonElement;
+    copy.addEventListener("click", async () => {
+      try { await navigator.clipboard.writeText(link); copy.textContent = t("store.copied"); }
+      catch { copy.textContent = link.replace(/^https?:\/\//, ""); }  // clipboard blocked → reveal for manual copy
     });
+    const re = m.querySelector("#bbsReconnectBtn") as HTMLButtonElement | null;
+    if (re && pack) re.addEventListener("click", () => this.attemptReconnect(pack, re));
+  }
+
+  /** Secondary path: tear down and re-pair a fresh WalletConnect session, then
+      retry — only helps wallets that grant Cronos on a new pairing. */
+  private async attemptReconnect(pack: BigBangPack, btn: HTMLButtonElement): Promise<void> {
+    btn.disabled = true; btn.textContent = t("store.switching");
+    this.wallet.onLog = (m) => this.logStep(m);
+    try {
+      this.logStep("· reconnect: re-pairing a fresh session…");
+      await this.wallet.reconnect();
+      const prep = await this.wallet.prepareCronos();
+      this.logStep(`· post-reconnect prepareCronos → ${prep}`);
+      this.wallet.onLog = null;
+      if (prep === "ok") { this.busy = false; this.buy(pack.id); }
+      else { this.showBrowserHint(pack); }   // still no Cronos → stay on the reliable browser path
+    } catch (e) {
+      this.logStep(`✗ reconnect: ${(e instanceof Error ? e.message : String(e)).slice(0, 100)}`);
+      this.wallet.onLog = null;
+      btn.disabled = false; btn.textContent = t("store.reconnectBtn");
+    }
   }
 
   private injectStyles(): void {
@@ -378,6 +366,9 @@ export class BigBangStore {
     .bbsSwitchBtn:active{transform:scale(.97)}
     .bbsSwitchBtn:disabled{opacity:.6;cursor:default}
     .bbsSwitchManual{font-size:10.5px;font-weight:500;line-height:1.5;color:#c4cbe8;max-width:300px}
+    .bbsReconnectLink{margin-top:2px;background:none;border:none;font-family:inherit;font-size:11px;font-weight:600;
+      color:#9db0e6;text-decoration:underline;cursor:pointer;padding:4px}
+    .bbsReconnectLink:disabled{opacity:.6;cursor:default}
     .bbsConfirm{display:flex;flex-direction:column;align-items:center;gap:12px;margin-top:14px;padding:18px 16px;
       border-radius:16px;background:radial-gradient(120% 100% at 50% 0%, rgba(120,90,255,.25), transparent 65%),rgba(40,30,90,.5);
       border:1px solid rgba(150,170,255,.4)}
