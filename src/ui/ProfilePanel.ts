@@ -12,7 +12,7 @@ import { BigBangCredits } from "../net/BigBangCredits";
 import { i18n, t } from "../i18n";
 
 const DEFAULT_AVATAR = "/appicon.png";   // official Super Novus icon until one is uploaded
-import { NICKNAME_MIN, NICKNAME_MAX } from "../config";
+import { NICKNAME_MIN, NICKNAME_MAX, TREASURY_ADDRESS } from "../config";
 
 const BCP47: Record<string, string> = { fr: "fr-FR", en: "en-US", ko: "ko-KR" };
 
@@ -219,11 +219,19 @@ export class ProfilePanel {
         <span class="pfCredArrow">›</span>
       </button>`;
 
+    // Owner-only shortcut: when the TREASURY wallet is connected, show a discreet
+    // "Admin — Payouts" button that opens the payout console (?admin=1). Hidden for
+    // every other wallet, so players never see it.
+    const isTreasury = addr.toLowerCase() === TREASURY_ADDRESS.toLowerCase();
+    const admin = isTreasury
+      ? `<button id="pfAdmin" class="pfBtn pfBtnGold" style="width:100%;margin-top:8px">🏆 ${t("profile.adminPayouts")}</button>`
+      : "";
+
     // Game history + reward history are intentionally out of scope for now
     // (frontend-first). They'll return with the Supabase-backed profile.
     // Disconnect lives here — never on the home screen.
     const disconnect = `<button id="pfDisconnect" class="pfBtn pfDanger">${t("menu.logout")}</button>`;
-    return `<div class="pfCard">${head}${configWarn}${meta}${credits}${ranks}${statsGrid}${disconnect}</div>`;
+    return `<div class="pfCard">${head}${configWarn}${meta}${credits}${ranks}${statsGrid}${admin}${disconnect}</div>`;
   }
 
   private bindShell(row?: ProfileRow | null): void {
@@ -243,6 +251,10 @@ export class ProfilePanel {
     file?.addEventListener("change", () => this.onAvatarFile(file));
     // Big Bang Credits → purchase history.
     this.el.querySelector("#pfCredits")?.addEventListener("click", () => this.showHistory());
+    // Owner-only: open the payout console (reloads with ?admin=1).
+    this.el.querySelector("#pfAdmin")?.addEventListener("click", () => {
+      location.href = location.pathname + "?admin=1";
+    });
   }
 
   /* ===================== Big Bang credits: purchase history ===================== */
