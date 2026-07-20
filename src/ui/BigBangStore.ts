@@ -185,7 +185,12 @@ export class BigBangStore {
       // re-pair can't fix it — so the reliable in-app-browser path is shown first,
       // with a small secondary "reconnect" option for wallets that CAN grant Cronos
       // on a fresh pairing.
-      if (prep === "reconnect") { this.showBrowserHint(pack); return; }
+      // The wallet won't route Cronos over WalletConnect (proven for several mobile
+      // wallets, incl. Crypto.com Onchain, which grant only eip155:1). Don't loop
+      // the player through dead ends — go straight to the guaranteed method: pay CRO
+      // directly and verify on-chain. A small "other options" link still offers the
+      // in-app-browser / reconnect routes.
+      if (prep === "reconnect") { this.showManualPay(pack); return; }
       if (prep === "switch") { this.showSwitch(pack); return; }
 
       // 3) Pay — payCRO logs session-readiness, payload, request, and response.
@@ -309,7 +314,9 @@ export class BigBangStore {
     m.innerHTML = `
       <div class="bbsPay">
         <div class="bbsSwitchTitle">${t("store.payDirectTitle")}</div>
-        <div class="bbsPayStep">${t("store.payStep1", { n: this.cro(pack.priceCRO) })}</div>
+        <div class="bbsPaySub">${t("store.payWhy")}</div>
+        <div class="bbsPayAmount">${this.cro(pack.priceCRO)} CRO</div>
+        <div class="bbsPayStep">${t("store.payStep1b")}</div>
         <div class="bbsPayAddr" id="bbsPayAddr">${addr}</div>
         <button class="bbsSwitchBtn" id="bbsPayCopyAddr">${t("store.payCopyAddr")}</button>
         <div class="bbsPayStep">${t("store.payStep2")}</div>
@@ -317,7 +324,7 @@ export class BigBangStore {
                autocapitalize="off" spellcheck="false" placeholder="${t("store.payHashPlaceholder")}" />
         <button class="bbsConfirmBtn" id="bbsPayVerify">${t("store.payVerify")}</button>
         <div class="bbsPayMsg" id="bbsPayMsg"></div>
-        <button class="bbsReconnectLink" id="bbsPayBack">${t("common.cancel")}</button>
+        <button class="bbsReconnectLink" id="bbsPayBack">${t("store.payOtherOptions")}</button>
       </div>`;
     try { m.scrollIntoView({ block: "center", behavior: "smooth" }); } catch { /* ignore */ }
 
@@ -455,6 +462,8 @@ export class BigBangStore {
     .bbsPay{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:14px;padding:18px 16px;
       border-radius:16px;background:radial-gradient(120% 100% at 50% 0%, rgba(120,90,255,.22), transparent 65%),rgba(30,26,64,.55);
       border:1px solid rgba(150,170,255,.4)}
+    .bbsPaySub{font-size:11px;font-weight:500;color:#b9c2e6;line-height:1.45;text-align:center;max-width:320px}
+    .bbsPayAmount{font-size:26px;font-weight:800;color:var(--gold);letter-spacing:.5px;margin:2px 0}
     .bbsPayStep{font-size:11.5px;font-weight:700;color:#dbe3ff;line-height:1.45;text-align:center;max-width:320px}
     .bbsPayAddr{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11px;color:#ffe6a8;word-break:break-all;
       text-align:center;padding:9px 12px;border-radius:10px;background:rgba(6,10,26,.7);border:1px solid rgba(150,170,255,.28);width:100%;box-sizing:border-box}
