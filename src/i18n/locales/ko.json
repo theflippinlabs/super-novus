@@ -150,6 +150,10 @@
   "wallet.noConfig": "지갑이 구성되지 않았습니다 (VITE_WC_PROJECT_ID 없음, 주입된 지갑 없음) — 게스트 모드 사용 가능.",
   "wallet.guestNote": "연결하지 않으면 점수가 순위표에 등록되지 않습니다.",
   "wallet.rankedNote": "최고 점수가 공개 순위표에 저장됩니다.",
+  "wallet.authorizing": "순위표 활성화 중…",
+  "wallet.authOpen": "👉 지갑을 열어 확인 (최초 1회)",
+  "wallet.authWait": "지갑을 열어 한 번만 확인한 후 돌아오세요.",
+  "wallet.authReady": "지갑 준비 완료 ✓ — 점수가 자동으로 등록됩니다.",
   "wallet.otherNet": "Cronos가 아닌 네트워크 — 점수 서명은 여전히 작동합니다.",
 
   "controls.title": "조작",

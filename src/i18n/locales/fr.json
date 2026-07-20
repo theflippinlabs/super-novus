@@ -150,6 +150,10 @@
   "wallet.noConfig": "Wallet non configuré (VITE_WC_PROJECT_ID absent et aucun wallet injecté) — mode invité disponible.",
   "wallet.guestNote": "Sans connexion, ton score ne sera pas enregistré au classement.",
   "wallet.rankedNote": "Ton meilleur score sera enregistré au classement public.",
+  "wallet.authorizing": "Activation du classement…",
+  "wallet.authOpen": "👉 Ouvrir le wallet pour valider (une seule fois)",
+  "wallet.authWait": "Ouvre ton wallet et valide une seule fois, puis reviens.",
+  "wallet.authReady": "Wallet prêt ✓ — tes scores se publient automatiquement.",
   "wallet.otherNet": "Réseau différent de Cronos — la signature du score fonctionne quand même.",
 
   "controls.title": "CONTRÔLES",
