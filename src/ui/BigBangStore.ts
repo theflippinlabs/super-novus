@@ -291,12 +291,26 @@ export class BigBangStore {
     this.el.querySelectorAll<HTMLButtonElement>(".bbsBuy").forEach((b) => (b.disabled = false));
     const m = this.el.querySelector("#bbsMsg") as HTMLElement | null;
     if (!m) return;
+    const link = window.location.origin;
     m.className = "bbsMsg";
     m.innerHTML = `
       <div class="bbsSwitch">
         <div class="bbsSwitchTitle">⚠ ${t("store.noCronosTitle")}</div>
         <div class="bbsSwitchManual">${t("store.noCronosMsg")}</div>
+        <button class="bbsSwitchBtn" id="bbsCopyLink">${t("store.copyLink")}</button>
+        <div class="bbsSwitchManual" style="opacity:.85">${link.replace(/^https?:\/\//, "")}</div>
       </div>`;
+    const btn = m.querySelector("#bbsCopyLink") as HTMLButtonElement;
+    btn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(link);
+        btn.textContent = t("store.copied");
+      } catch {
+        // Clipboard blocked (older iOS / no permission): select-fallback isn't
+        // reliable here, so just reveal the URL for manual copy.
+        btn.textContent = link.replace(/^https?:\/\//, "");
+      }
+    });
   }
 
   private injectStyles(): void {
