@@ -15,6 +15,7 @@ export class Player {
   private core: THREE.Mesh;
   private g1: THREE.Sprite;
   private g2: THREE.Sprite;
+  private g3: THREE.Sprite;
   private flare: THREE.Sprite;
   private light: THREE.PointLight;
 
@@ -48,34 +49,43 @@ export class Player {
         }
         float fbm(vec3 p){
           float v = 0.0, a = 0.55;
-          for (int i = 0; i < 4; i++){ v += a*noise(p); p *= 2.1; a *= 0.5; }
+          for (int i = 0; i < 5; i++){ v += a*noise(p); p *= 2.1; a *= 0.5; }
           return v;
         }
         void main(){
-          float n = fbm(vP*3.0 + vec3(0.0, uTime*0.8, uTime*0.5));
+          // Slow overall pulse — the whole core "breathes" with energy.
+          float pulse = 0.5 + 0.5*sin(uTime*2.0);
+          float n  = fbm(vP*3.0 + vec3(0.0, uTime*0.8, uTime*0.5));
           float n2 = fbm(vP*7.0 - vec3(uTime*1.2, 0.0, uTime*0.7));
           float heat = n*0.7 + n2*0.5;
           // Electric blue-cyan plasma core (matches the SUPERNOVUS logo).
-          vec3 hot  = vec3(0.90, 0.98, 1.00);   // white-cyan hottest
-          vec3 mid  = vec3(0.28, 0.66, 1.00);   // electric blue
-          vec3 cool = vec3(0.26, 0.26, 0.92);   // deep indigo edges
+          vec3 hot  = vec3(0.92, 0.99, 1.00);   // white-cyan hottest
+          vec3 mid  = vec3(0.26, 0.66, 1.00);   // electric blue
+          vec3 cool = vec3(0.24, 0.28, 0.95);   // deep indigo edges
           vec3 col = mix(hot, mid, smoothstep(0.35, 0.62, heat));
-          col = mix(col, cool, smoothstep(0.62, 0.85, heat));
-          float fr = pow(1.0 - abs(dot(normalize(vN), normalize(-vW))), 2.2);
-          col += vec3(0.34, 0.66, 1.00) * fr * 1.6;  // cyan-blue fresnel rim
-          gl_FragColor = vec4(col*1.32, 1.0);
+          col = mix(col, cool, smoothstep(0.62, 0.86, heat));
+          // Bright energy filaments crawling over the surface.
+          float veins = pow(fbm(vP*11.0 + vec3(uTime*1.6, -uTime*0.9, uTime*1.1)), 3.0);
+          col += vec3(0.55, 0.85, 1.00) * veins * (1.2 + 0.6*pulse);
+          // Pulsing cyan-blue fresnel rim (volumetric edge glow).
+          float fr = pow(1.0 - abs(dot(normalize(vN), normalize(-vW))), 2.0);
+          col += vec3(0.34, 0.70, 1.05) * fr * (1.7 + 0.5*pulse);
+          col *= 1.30 + 0.10*pulse;             // subtle brightness breathing
+          gl_FragColor = vec4(col, 1.0);
         }`,
     });
     this.core = new THREE.Mesh(new THREE.SphereGeometry(this.r, 40, 30), this.coreMat);
     this.group.add(this.core);
 
-    // Smaller, dimmer white halo — keeps the core visible without washing out
-    // nearby obstacles (gameplay readability over bloom).
-    this.g1 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0xa8d4ff, transparent: true, opacity: .3, depthWrite: false, blending: THREE.AdditiveBlending }));
-    this.g1.scale.setScalar(5);
-    this.g2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0x4a9cff, transparent: true, opacity: .75, depthWrite: false, blending: THREE.AdditiveBlending }));
+    // Layered additive glow — inner white-cyan, a mid blue halo, and a large faint
+    // volumetric outer bloom. Kept moderate so nearby obstacles stay readable.
+    this.g1 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0xbfe0ff, transparent: true, opacity: .34, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.g1.scale.setScalar(5.5);
+    this.g2 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0x4a9cff, transparent: true, opacity: .8, depthWrite: false, blending: THREE.AdditiveBlending }));
     this.g2.scale.setScalar(15);
-    this.group.add(this.g1, this.g2);
+    this.g3 = new THREE.Sprite(new THREE.SpriteMaterial({ map: TEX.star, color: 0x2a66ff, transparent: true, opacity: .3, depthWrite: false, blending: THREE.AdditiveBlending }));
+    this.g3.scale.setScalar(26);
+    this.group.add(this.g3, this.g1, this.g2);
 
     // Warmer, dimmer, smaller lens flare (was bright white and oversized).
     this.flare = new THREE.Sprite(new THREE.SpriteMaterial({
@@ -94,7 +104,8 @@ export class Player {
     this.flare.scale.setScalar(8);
     this.group.add(this.flare);
 
-    this.light = new THREE.PointLight(0x6aa8ff, PLAYER_LIGHT_INTENSITY, 110, 1.6);
+    // Wider reach so more nearby asteroids catch the travelling player light.
+    this.light = new THREE.PointLight(0x6aa8ff, PLAYER_LIGHT_INTENSITY, 132, 1.6);
     this.group.add(this.light);
 
     // Render the whole visual group ~20% smaller (agility/space) WITHOUT
@@ -108,15 +119,19 @@ export class Player {
   /** STAR ENERGY full: brighten without touching the core shader. */
   setCharged(charged: boolean): void {
     this.light.intensity = charged ? PLAYER_LIGHT_INTENSITY_CHARGED : PLAYER_LIGHT_INTENSITY;
-    this.g2.material.opacity = charged ? 0.95 : 0.75;
+    this.g2.material.opacity = charged ? 1.0 : 0.8;
+    this.g3.material.opacity = charged ? 0.42 : 0.3;
   }
 
   update(dt: number, t: number): void {
     this.coreMat.uniforms.uTime.value = t;
     this.core.rotation.y += dt * 0.6;
     this.core.rotation.x += dt * 0.25;
-    this.g1.material.opacity = 0.3 + Math.sin(t * 7) * 0.05;
-    this.g2.scale.setScalar(15 + Math.sin(t * 4.3) * 1.8);
+    // Subtle energy breathing — the core and glows pulse gently in sync.
+    this.core.scale.setScalar(1 + Math.sin(t * 3.4) * 0.03);
+    this.g1.material.opacity = 0.34 + Math.sin(t * 7) * 0.06;
+    this.g2.scale.setScalar(15 + Math.sin(t * 4.3) * 2.2);
+    this.g3.scale.setScalar(26 + Math.sin(t * 2.1) * 2.6);
     this.flare.material.rotation += dt * 0.3;
     if (this.invuln > 0) {
       this.invuln -= dt;
