@@ -5,7 +5,7 @@
    are instant with no wallet. Fails soft with a precise, localized reason. */
 import { WalletManager, PayError } from "../net/WalletManager";
 import { BigBangCredits } from "../net/BigBangCredits";
-import { verifyPayment, isTxUsed, markTxUsed } from "../net/CronosPay";
+import { verifyPayment, watchForPayment, findRecentPayments, isTxUsed, markTxUsed } from "../net/CronosPay";
 import { BIG_BANG_PACKS, BIG_BANG_RECIPIENT, type BigBangPack } from "../config";
 import { i18n, t } from "../i18n";
 
@@ -51,6 +51,7 @@ export class BigBangStore {
         <div class="bbsSub">${t("store.subtitle")}</div>
         <div class="bbsCards">${cards}</div>
         <div id="bbsMsg" class="bbsMsg"></div>
+        <button class="bbsReconnectLink" id="bbsRecover">${t("store.recoverLink")}</button>
         <div id="bbsLogWrap" class="bbsLogWrap" style="display:none">
           <div class="bbsLogHead">${t("store.logTitle")}</div>
           <pre id="bbsLog" class="bbsLog"></pre>
@@ -61,6 +62,7 @@ export class BigBangStore {
     const saved = this.loadLog();
     if (saved) this.renderLog(saved);
     (this.el.querySelector("#bbsClose") as HTMLElement).addEventListener("click", () => this.close());
+    (this.el.querySelector("#bbsRecover") as HTMLButtonElement).addEventListener("click", (e) => this.recoverPayments(e.currentTarget as HTMLButtonElement));
     this.el.addEventListener("click", (e) => { if (e.target === this.el && !this.busy) this.close(); });
     for (const btn of this.el.querySelectorAll<HTMLButtonElement>(".bbsBuy"))
       btn.addEventListener("click", () => this.buy(btn.dataset.pack as BigBangPack["id"]));
@@ -193,18 +195,46 @@ export class BigBangStore {
       if (prep === "reconnect") { this.showBrowserHint(pack); return; }
       if (prep === "switch") { this.showSwitch(pack); return; }
 
-      // 3) Pay — payCRO logs session-readiness, payload, request, and response.
-      const txHash = await this.wallet.payCRO(BIG_BANG_RECIPIENT, pack.priceCRO);
-      this.logStep(`✓ callback: tx ${txHash.slice(0, 14)}…`);
+      // 3) Pay. The wallet may send the tx but NOT return its hash (WalletConnect
+      // on iOS frequently drops the response) — the money is still on-chain. So the
+      // credit is granted from ON-CHAIN CONFIRMATION, never from the WC reply alone.
+      const from = this.wallet.getAddress() || "";
+      let txHash: string | null = null;
+      let payReason: string | null = null;
+      try {
+        txHash = await this.wallet.payCRO(BIG_BANG_RECIPIENT, pack.priceCRO);
+        this.logStep(`✓ wallet returned tx ${txHash.slice(0, 14)}…`);
+      } catch (e) {
+        payReason = e instanceof PayError ? e.reason : "failed";
+        this.logStep(`· payCRO ${payReason} — no hash returned`);
+        // A rejected/insufficient-funds/no-wallet error means NO payment was made.
+        if (payReason === "rejected" || payReason === "funds" || payReason === "no-wallet") throw e;
+      }
+      // No hash (lost response) but a payment may have gone through — watch the chain.
+      if (!txHash && from) {
+        this.msg(t("store.payConfirming"), true);
+        this.logStep("· watching Cronos for the payment…");
+        txHash = await watchForPayment(from, pack.priceCRO, BIG_BANG_RECIPIENT, {
+          onTick: (b) => this.logStep(`· scanned block ${b}`),
+        });
+        this.logStep(`· on-chain watch → ${txHash ? txHash.slice(0, 14) + "…" : "not found"}`);
+      }
 
-      // 4) Credit.
-      this.credits.addPack(pack, txHash, Date.now());
-      this.logStep(`✓ purchase credited: +${pack.credits} Big Bangs`);
-      this.onChange();
-      const keep = this.logLines.slice();   // render() rebuilds the DOM — re-show the log
-      this.render();
-      this.renderLog(keep);
-      this.msg(t("store.purchased", { n: pack.credits }), true);
+      // 4) Credit only on a confirmed on-chain payment (deduped by tx hash).
+      if (txHash && !isTxUsed(txHash)) {
+        markTxUsed(txHash);
+        this.credits.addPack(pack, txHash, Date.now());
+        this.logStep(`✓ purchase credited: +${pack.credits} Big Bangs`);
+        this.onChange();
+        const keep = this.logLines.slice();   // render() rebuilds the DOM — re-show the log
+        this.render();
+        this.renderLog(keep);
+        this.msg(t("store.purchased", { n: pack.credits }), true);
+        return;
+      }
+      if (txHash) { this.msg(t("store.alreadyCredited"), true); return; } // hash already used
+      // Nothing confirmed on-chain — surface the payment error / timeout.
+      throw new PayError((payReason as never) || "timeout", "Paiement non confirmé");
     } catch (e) {
       const reason = e instanceof PayError ? e.reason : "failed";
       const raw = e instanceof Error ? e.message : String(e ?? "");
@@ -222,6 +252,52 @@ export class BigBangStore {
     } finally {
       this.wallet.onLog = null;
       this.wallet.onRequestSent = null;
+      this.busy = false;
+    }
+  }
+
+  /** Recover a payment whose credit was lost (wallet sent the CRO but the game
+      never got the response). Scans recent Cronos blocks for payments FROM the
+      connected wallet TO the treasury, matches each to a pack by amount, and
+      credits any that weren't credited yet. Deduped by tx hash. */
+  private async recoverPayments(btn: HTMLButtonElement): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    btn.disabled = true; btn.textContent = t("store.recovering");
+    this.resetLog();
+    this.wallet.onLog = (m) => this.logStep(m);
+    try {
+      // Need the wallet address. Prefer the injected/direct provider; else connect.
+      if (!this.wallet.getAddress()) {
+        if (this.wallet.hasInjected()) await this.wallet.connectDirect();
+        else await this.wallet.connect();
+      }
+      const addr = this.wallet.getAddress();
+      if (!addr) { this.msg(t("bigbang.errNoWallet")); return; }
+      this.logStep(`▶ recover: scanning Cronos for payments from ${addr.slice(0, 6)}…${addr.slice(-4)}`);
+      const found = await findRecentPayments(addr, BIG_BANG_RECIPIENT);
+      this.logStep(`· found ${found.length} payment(s) to the game`);
+      let credited = 0;
+      for (const f of found) {
+        if (isTxUsed(f.hash)) { this.logStep(`· ${f.hash.slice(0, 10)}… already credited`); continue; }
+        const pack = BIG_BANG_PACKS.find((p) => Math.abs(p.priceCRO - f.cro) <= Math.max(1, p.priceCRO * 0.01));
+        if (!pack) { this.logStep(`· ${f.cro} CRO — no matching pack`); continue; }
+        markTxUsed(f.hash);
+        this.credits.addPack(pack, f.hash, Date.now());
+        credited += pack.credits;
+        this.logStep(`✓ credited +${pack.credits} (${pack.priceCRO} CRO · ${f.hash.slice(0, 10)}…)`);
+      }
+      this.onChange();
+      const keep = this.logLines.slice();
+      this.render();
+      this.renderLog(keep);
+      this.msg(credited > 0 ? t("store.recovered", { n: credited }) : t("store.recoverNone"), credited > 0);
+    } catch (e) {
+      this.logStep(`✗ recover: ${(e instanceof Error ? e.message : String(e)).slice(0, 100)}`);
+      this.msg(t("store.recoverNone"));
+      btn.disabled = false; btn.textContent = t("store.recoverLink");
+    } finally {
+      this.wallet.onLog = null;
       this.busy = false;
     }
   }
