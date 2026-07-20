@@ -41,7 +41,13 @@ export class LeaderboardPage {
   }
 
   isOpen(): boolean { return this.el.style.display !== "none"; }
-  close(): void { this.el.style.display = "none"; this.el.innerHTML = ""; }
+  close(): void {
+    // Slide the page out to the right, then unmount (smooth page navigation).
+    this.el.classList.add("lbpClosing");
+    const done = () => { this.el.style.display = "none"; this.el.classList.remove("lbpClosing"); this.el.innerHTML = ""; };
+    if (matchMedia("(prefers-reduced-motion: reduce)").matches) { done(); return; }
+    window.setTimeout(done, 240);
+  }
 
   private locale(): string { return BCP47[i18n.get()] ?? "en-US"; }
   private num(n: number): string { return Math.floor(n || 0).toLocaleString(this.locale()); }
@@ -80,34 +86,35 @@ export class LeaderboardPage {
   private renderShell(): void {
     this.el.innerHTML = `
       <div class="lbpSheet">
-        <div class="lbpHead">
-          <div class="lbpTitleWrap">
-            <div class="lbpTitle">🏆 ${t("lb.title")}</div>
-            <div class="lbpHeroSub">${t("lb.heroSub")}</div>
+        <div class="lbpFixed">
+          <div class="lbpHead">
+            <button class="lbpBack" id="lbpClose" aria-label="${t("common.close")}">‹</button>
+            <div class="lbpTitleWrap">
+              <div class="lbpTitle">🏆 ${t("lb.title")}</div>
+              <div class="lbpHeroSub">${t("lb.heroSub")}</div>
+            </div>
           </div>
-          <button class="lbpClose" id="lbpClose" aria-label="${t("common.close")}">✕</button>
-        </div>
-        <div class="lbpTabs">
-          <button class="lbpTab${this.period === "weekly" ? " on" : ""}" data-period="weekly">${t("menu.tabWeekly")}</button>
-          <button class="lbpTab${this.period === "monthly" ? " on" : ""}" data-period="monthly">${t("menu.tabMonthly")}</button>
-        </div>
-        <div class="lbpPrize" id="lbpPrize"></div>
-        <div class="podium" id="lbpPodium"></div>
-        <div class="lbpSearchWrap">
-          <span class="lbpSearchIcon">⌕</span>
-          <input id="lbpSearch" class="lbpSearch" type="text" inputmode="search"
-            placeholder="${t("lb.searchPlaceholder")}" autocomplete="off" value="${escHtml(this.query)}">
-        </div>
-        <div class="lbpCols">
-          <span class="c-rank">#</span><span class="c-name">${t("lb.colPlayer")}</span>
-          <span class="c-dd">${t("lb.colDist")}</span><span class="c-dd">${t("lb.colDust")}</span>
-          <span class="c-score">${t("lb.colScore")}</span>
+          <div class="lbpTabs">
+            <button class="lbpTab${this.period === "weekly" ? " on" : ""}" data-period="weekly">${t("menu.tabWeekly")}</button>
+            <button class="lbpTab${this.period === "monthly" ? " on" : ""}" data-period="monthly">${t("menu.tabMonthly")}</button>
+          </div>
+          <div class="lbpPrize" id="lbpPrize"></div>
+          <div class="podium" id="lbpPodium"></div>
+          <div class="lbpSearchWrap">
+            <span class="lbpSearchIcon">⌕</span>
+            <input id="lbpSearch" class="lbpSearch" type="text" inputmode="search"
+              placeholder="${t("lb.searchPlaceholder")}" autocomplete="off" value="${escHtml(this.query)}">
+          </div>
+          <div class="lbpCols">
+            <span class="c-rank">#</span><span class="c-name">${t("lb.colPlayer")}</span>
+            <span class="c-dd">${t("lb.colDist")}</span><span class="c-dd">${t("lb.colDust")}</span>
+            <span class="c-score">${t("lb.colScore")}</span>
+          </div>
         </div>
         <div class="lbpList" id="lbpList"></div>
         <div class="lbpMeFloat" id="lbpMeFloat" style="display:none"></div>
       </div>`;
     (this.el.querySelector("#lbpClose") as HTMLElement).addEventListener("click", () => this.close());
-    this.el.addEventListener("click", (e) => { if (e.target === this.el) this.close(); });
     for (const tab of this.el.querySelectorAll<HTMLElement>(".lbpTab"))
       tab.addEventListener("click", () => {
         const p = tab.dataset.period as LeaderboardPeriod;
@@ -225,23 +232,24 @@ export class LeaderboardPage {
     const s = document.createElement("style");
     s.id = "lbpStyles";
     s.textContent = `
-    .lbpOverlay{position:fixed;inset:0;z-index:30;display:flex;align-items:flex-end;justify-content:center;
-      background:rgba(3,4,14,.68);-webkit-backdrop-filter:blur(6px);backdrop-filter:blur(6px);animation:lbpFade .2s ease}
-    @keyframes lbpFade{from{opacity:0}to{opacity:1}}
-    .lbpSheet{position:relative;width:min(100vw,560px);max-height:94vh;display:flex;flex-direction:column;
-      padding:calc(env(safe-area-inset-top) + 14px) 16px calc(env(safe-area-inset-bottom) + 14px);
-      background:radial-gradient(120% 55% at 50% -8%, rgba(120,90,220,.3), transparent 60%),
+    .lbpOverlay{position:fixed;inset:0;z-index:30;display:flex;justify-content:center;overflow:hidden;
+      background:radial-gradient(120% 45% at 50% -6%, rgba(120,90,220,.28), transparent 60%),
         linear-gradient(180deg,#0b0a20 0%,#08071a 60%,#050414 100%);
-      border-radius:24px 24px 0 0;border:1px solid rgba(150,170,255,.18);border-bottom:none;
-      box-shadow:0 -20px 60px rgba(0,0,0,.6);animation:lbpUp .28s cubic-bezier(.2,.8,.2,1)}
-    @keyframes lbpUp{from{transform:translateY(40px);opacity:.4}to{transform:translateY(0);opacity:1}}
-    .lbpHead{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;margin-bottom:12px}
+      background-color:#050414;animation:lbpSlideIn .3s cubic-bezier(.2,.8,.2,1)}
+    .lbpOverlay.lbpClosing{animation:lbpSlideOut .24s ease forwards}
+    @keyframes lbpSlideIn{from{transform:translateX(100%)}to{transform:translateX(0)}}
+    @keyframes lbpSlideOut{from{transform:translateX(0)}to{transform:translateX(100%)}}
+    .lbpSheet{position:relative;width:min(100vw,560px);height:100%;display:flex;flex-direction:column;
+      padding:calc(env(safe-area-inset-top) + 10px) 16px calc(env(safe-area-inset-bottom) + 12px)}
+    .lbpFixed{flex-shrink:0}
+    .lbpHead{display:flex;align-items:center;gap:10px;margin-bottom:12px}
     .lbpTitle{font-size:16px;font-weight:800;letter-spacing:1.5px;
       background:linear-gradient(180deg,#fff,#ffe6a8 60%,#F0B429);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
-    .lbpHeroSub{font-size:11px;color:#9aa3c4;letter-spacing:.2px;margin-top:4px;line-height:1.4;max-width:300px}
-    .lbpClose{flex-shrink:0;width:38px;height:38px;border-radius:50%;font-size:15px;color:#dce4ff;cursor:pointer;
-      background:rgba(30,38,78,.6);border:1px solid rgba(150,170,255,.28);font-family:inherit}
-    .lbpClose:active{transform:scale(.92)}
+    .lbpHeroSub{font-size:11px;color:#9aa3c4;letter-spacing:.2px;margin-top:3px;line-height:1.4;max-width:300px}
+    .lbpBack{flex-shrink:0;width:40px;height:40px;border-radius:12px;font-size:26px;line-height:1;color:#dce4ff;cursor:pointer;
+      display:flex;align-items:center;justify-content:center;padding-bottom:3px;
+      background:rgba(30,38,78,.55);border:1px solid rgba(150,170,255,.24);font-family:inherit}
+    .lbpBack:active{transform:scale(.92)}
     .lbpTabs{display:flex;gap:8px;margin-bottom:10px}
     .lbpTab{flex:1;font-family:inherit;font-size:11px;letter-spacing:1.2px;font-weight:800;padding:11px 4px;
       color:#9aa6d4;background:rgba(28,36,74,.5);border:1px solid rgba(150,170,255,.16);border-radius:11px;
@@ -259,7 +267,7 @@ export class LeaderboardPage {
     .lbpCols{display:grid;grid-template-columns:30px 1fr 50px 46px 66px;gap:4px;align-items:center;
       padding:0 8px 7px;font-size:8.5px;letter-spacing:1.5px;color:#5a6288;font-weight:700;text-transform:uppercase}
     .lbpCols .c-dd,.lbpCols .c-score{text-align:right}
-    .lbpList{overflow-y:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;flex:1;min-height:110px;
+    .lbpList{overflow-y:auto;-webkit-overflow-scrolling:touch;scroll-behavior:smooth;flex:1 1 auto;min-height:0;
       display:flex;flex-direction:column;gap:4px;padding-right:2px}
     .lbpRow{display:grid;grid-template-columns:30px 1fr 50px 46px 66px;gap:4px;align-items:center;
       padding:8px;border-radius:12px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.05);
