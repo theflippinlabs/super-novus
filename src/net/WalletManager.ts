@@ -483,10 +483,25 @@ export class WalletManager {
     // signs the exact EIP-191 digest the Edge Function reconstructs.
     const hexMsg = "0x" + Array.from(new TextEncoder().encode(msg))
       .map((b) => b.toString(16).padStart(2, "0")).join("");
-    return (await this.provider.request({
+    const req = this.provider.request({
       method: "personal_sign",
       params: [hexMsg, this.address],
-    })) as string;
+    }) as Promise<string>;
+    // iOS WalletConnect does NOT foreground the wallet for a session request, so the
+    // sign prompt never appears and the await hangs forever (score save stuck on
+    // "Saving…"). Tell the UI to show an "Open wallet to sign" button (a fresh user
+    // gesture reliably opens the wallet), best-effort auto-redirect, and race a
+    // timeout so a lost response surfaces instead of hanging.
+    // Only WalletConnect needs foregrounding — injected wallets prompt natively.
+    if (this.wc && this.provider === this.wc) {
+      const redirect = this.walletRedirect();
+      try { this.onRequestSent?.(redirect); } catch { /* ignore */ }
+      if (redirect) { try { window.location.href = redirect; } catch { /* blocked outside gesture */ } }
+    }
+    return (await Promise.race([
+      req,
+      new Promise<string>((_, rej) => setTimeout(() => rej(new Error("sign-timeout")), 90_000)),
+    ])) as string;
   }
 
   /** Send a native CRO payment on Cronos; returns the transaction hash.

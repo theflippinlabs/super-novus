@@ -37,6 +37,8 @@
   "gameover.saveBtn": "점수 저장",
   "gameover.savePrompt": "점수를 순위표에 등록하세요",
   "gameover.saving": "저장 중…",
+  "gameover.signOpen": "👉 지갑을 열어 서명 & 저장",
+  "gameover.signWait": "지갑을 열어 점수에 서명한 후 돌아오세요.",
   "gameover.saveFailed": "저장 실패 — 다시 시도하세요.",
   "gameover.saveGuest": "점수 저장됨 — 지갑을 연결해 순위에 등록하세요.",
   "gameover.lbSoon": "온라인 순위표가 곧 제공됩니다",
