@@ -85,6 +85,76 @@ export async function verifyPayment(
   return { ok: true, value, from: (tx.from || "").toLowerCase() };
 }
 
+const hexToNum = (h: unknown): number => (typeof h === "string" ? parseInt(h, 16) : Number(h));
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+type RawTx = { hash?: string; from?: string; to?: string | null; value?: string };
+const txMatches = (tx: RawTx, fromL: string, toL: string, minWei: bigint): boolean => {
+  if ((tx.from || "").toLowerCase() !== fromL) return false;
+  if ((tx.to || "").toLowerCase() !== toL) return false;
+  let v: bigint;
+  try { v = BigInt(tx.value ?? "0x0"); } catch { return false; }
+  return v >= minWei;
+};
+
+/** Watch the chain FORWARD for a fresh native payment from `from` to `recipient`
+    of at least `minCRO`. This recovers the (common on iOS) case where the wallet
+    sent the transaction but the WalletConnect response never came back — the money
+    is on-chain, so we detect it and credit anyway. Returns the tx hash or null. */
+export async function watchForPayment(
+  from: string,
+  minCRO: number,
+  recipient: string = BIG_BANG_RECIPIENT,
+  opts: { timeoutMs?: number; onTick?: (block: number) => void } = {},
+): Promise<string | null> {
+  const fromL = from.toLowerCase();
+  const toL = recipient.toLowerCase();
+  const minWei = BigInt(Math.trunc(minCRO)) * (10n ** 18n);
+  let cursor: number;
+  try { cursor = Math.max(0, hexToNum(await rpc("eth_blockNumber", [])) - 4); } catch { return null; }
+  const deadline = Date.now() + (opts.timeoutMs ?? 90_000);
+  while (Date.now() < deadline) {
+    let tip: number;
+    try { tip = hexToNum(await rpc("eth_blockNumber", [])); } catch { tip = cursor; }
+    for (; cursor <= tip; cursor++) {
+      let blk: { transactions?: RawTx[] } | null;
+      try { blk = (await rpc("eth_getBlockByNumber", ["0x" + cursor.toString(16), true])) as typeof blk; } catch { break; }
+      for (const tx of blk?.transactions ?? []) {
+        if (txMatches(tx, fromL, toL, minWei) && tx.hash) return tx.hash;
+      }
+      opts.onTick?.(cursor);
+    }
+    await sleep(4000);
+  }
+  return null;
+}
+
+/** Scan the last `lookback` blocks for already-made native payments from `from`
+    to `recipient`. Used to RECOVER a payment whose credit was lost. Returns each
+    match as { hash, cro } (newest first). */
+export async function findRecentPayments(
+  from: string,
+  recipient: string = BIG_BANG_RECIPIENT,
+  lookback = 60,
+): Promise<{ hash: string; cro: number }[]> {
+  const fromL = from.toLowerCase();
+  const toL = recipient.toLowerCase();
+  let head: number;
+  try { head = hexToNum(await rpc("eth_blockNumber", [])); } catch { return []; }
+  const out: { hash: string; cro: number }[] = [];
+  for (let n = head; n > head - lookback && n >= 0; n--) {
+    let blk: { transactions?: RawTx[] } | null;
+    try { blk = (await rpc("eth_getBlockByNumber", ["0x" + n.toString(16), true])) as typeof blk; } catch { continue; }
+    for (const tx of blk?.transactions ?? []) {
+      if ((tx.from || "").toLowerCase() !== fromL || (tx.to || "").toLowerCase() !== toL) continue;
+      let v: bigint;
+      try { v = BigInt(tx.value ?? "0x0"); } catch { continue; }
+      if (v > 0n && tx.hash) out.push({ hash: tx.hash, cro: Number(v / 10n ** 15n) / 1000 });
+    }
+  }
+  return out;
+}
+
 // --- Replay guard: a given tx hash can credit exactly one purchase on this device.
 const USED_KEY = "super-novus:usedtx";
 
