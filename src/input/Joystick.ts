@@ -3,7 +3,7 @@
    adjustable dead zone and full diagonal support. Only mounted while a run is
    active in joystick mode. It changes NO gameplay constant — GameEngine integrates
    this vector into the same player position the finger-drag would set. */
-import { JOYSTICK_DEAD_ZONE, JOYSTICK_MAX_RADIUS } from "../config";
+import { JOYSTICK_DEAD_ZONE, JOYSTICK_MAX_RADIUS, JOYSTICK_EXPO } from "../config";
 import { t } from "../i18n";
 
 export class Joystick {
@@ -91,13 +91,17 @@ export class Joystick {
     const max = JOYSTICK_MAX_RADIUS;
     if (mag > max) { dx = (dx / mag) * max; dy = (dy / mag) * max; }
     this.knob.style.transform = `translate(${dx}px, ${dy}px)`;
-    // Normalize + apply dead zone, then rescale so control resumes smoothly.
+    // Direction (unit vector) is preserved exactly so the ship travels precisely
+    // where the stick points. Magnitude: strip the dead zone, rescale to 0..1,
+    // then apply an expo curve for fine control near centre / full speed at edge.
     const nx = dx / max, ny = dy / max;
     const nmag = Math.min(1, Math.hypot(nx, ny));
     if (nmag < JOYSTICK_DEAD_ZONE) { this.vec.x = 0; this.vec.y = 0; return; }
-    const scaled = (nmag - JOYSTICK_DEAD_ZONE) / (1 - JOYSTICK_DEAD_ZONE) / (nmag || 1);
-    this.vec.x = nx * scaled;
-    this.vec.y = -ny * scaled;  // screen-down is world-down → invert for world-up+
+    const out = (nmag - JOYSTICK_DEAD_ZONE) / (1 - JOYSTICK_DEAD_ZONE); // 0..1
+    const curved = Math.pow(out, JOYSTICK_EXPO);
+    const ux = nx / nmag, uy = ny / nmag;                              // unit direction
+    this.vec.x = ux * curved;
+    this.vec.y = -uy * curved;  // screen-down is world-down → invert for world-up+
   }
 
   private onUp(e: PointerEvent) {

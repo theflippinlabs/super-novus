@@ -42,7 +42,7 @@ import {
   DOUBLE_TAP_DELAY, DOUBLE_TAP_MAX_DIST, TAP_MAX_MOVE,
   NOVA_RADIUS, LEVEL_DURATION,
   BIG_BANG_PRICES, BIG_BANG_MAX, BIG_BANG_RECIPIENT, BIG_BANG_INVULN,
-  CONTROL_MODE_KEY, DEFAULT_CONTROL_MODE, JOYSTICK_SPEED_X, JOYSTICK_SPEED_Y,
+  CONTROL_MODE_KEY, DEFAULT_CONTROL_MODE, JOYSTICK_SCREEN_FRAC,
   type ControlMode, type Lang,
 } from "../config";
 
@@ -866,8 +866,15 @@ export class GameEngine {
     if (this.running && this.controlMode === "joystick"){
       const v = this.joystick.vec;
       if (v.x || v.y){
-        this.player.pos.x = clamp(this.player.pos.x + v.x * JOYSTICK_SPEED_X * rawDt, -CFG.fieldX + 1.2, CFG.fieldX - 1.2);
-        this.player.pos.y = clamp(this.player.pos.y + v.y * JOYSTICK_SPEED_Y * rawDt, -CFG.fieldY + 1.2, CFG.fieldY - 1.2);
+        // Screen-isotropic speed: derive per-axis world speed from how the field
+        // maps to the screen (same mapping Direct Touch uses), so equal stick
+        // deflection = equal on-screen speed and the ship goes exactly where you
+        // push. Full stick ≈ JOYSTICK_SCREEN_FRAC × the shorter screen side / s.
+        const screenPxPerSec = Math.min(innerWidth, innerHeight) * JOYSTICK_SCREEN_FRAC;
+        const spX = screenPxPerSec / ((innerWidth  * 0.62) / (CFG.fieldX * 2));
+        const spY = screenPxPerSec / ((innerHeight * 0.55) / (CFG.fieldY * 2));
+        this.player.pos.x = clamp(this.player.pos.x + v.x * spX * rawDt, -CFG.fieldX + 1.2, CFG.fieldX - 1.2);
+        this.player.pos.y = clamp(this.player.pos.y + v.y * spY * rawDt, -CFG.fieldY + 1.2, CFG.fieldY - 1.2);
       }
     }
 

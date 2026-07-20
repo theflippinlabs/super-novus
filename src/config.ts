@@ -182,12 +182,16 @@ export type ControlMode = (typeof CONTROL_MODES)[number];
 export const CONTROL_MODE_KEY = "super-novus:controls";
 export const DEFAULT_CONTROL_MODE: ControlMode = "touch";
 // Virtual joystick (Mode 2 — additive; Direct Touch stays exactly as-is).
-export const JOYSTICK_DEAD_ZONE = 0.16;    // fraction of knob travel ignored (0..1)
+export const JOYSTICK_DEAD_ZONE = 0.12;    // fraction of knob travel ignored (0..1)
 export const JOYSTICK_MAX_RADIUS = 56;     // px the knob can travel from center
-// Lateral field-units/s at full deflection. Tuned to feel close to a direct-touch
-// sweep — this only maps input, it never changes forward speed/collision/camera.
-export const JOYSTICK_SPEED_X = 52;
-export const JOYSTICK_SPEED_Y = 30;
+// Response curve applied to stick magnitude (1 = linear). >1 gives fine control
+// near centre for precise dodges while still reaching full speed at the edge.
+export const JOYSTICK_EXPO = 1.5;
+// Full-deflection ship speed as a fraction of the SHORTER screen dimension per
+// second. The per-axis world speed is derived at runtime from this so equal stick
+// deflection = equal ON-SCREEN speed (the ship goes exactly where you push). This
+// replaces the old fixed X/Y speeds, which made vertical ~1.8× faster on screen.
+export const JOYSTICK_SCREEN_FRAC = 1.2;
 
 // --- Localization ---
 export const LANGUAGES = ["fr", "en", "ko"] as const;
