@@ -52,15 +52,7 @@ export class BigBangStore {
         <div class="bbsCards">${cards}</div>
         <div id="bbsMsg" class="bbsMsg"></div>
         <button class="bbsReconnectLink" id="bbsRecover">${t("store.recoverLink")}</button>
-        <div id="bbsLogWrap" class="bbsLogWrap" style="display:none">
-          <div class="bbsLogHead">${t("store.logTitle")}</div>
-          <pre id="bbsLog" class="bbsLog"></pre>
-        </div>
       </div>`;
-    // Restore the last attempt's log (it survives the wallet deep-link / reload),
-    // so the player and I can see exactly where a purchase stalled.
-    const saved = this.loadLog();
-    if (saved) this.renderLog(saved);
     (this.el.querySelector("#bbsClose") as HTMLElement).addEventListener("click", () => this.close());
     (this.el.querySelector("#bbsRecover") as HTMLButtonElement).addEventListener("click", (e) => this.recoverPayments(e.currentTarget as HTMLButtonElement));
     this.el.addEventListener("click", (e) => { if (e.target === this.el && !this.busy) this.close(); });
@@ -95,55 +87,13 @@ export class BigBangStore {
     if (m) { m.textContent = text; m.className = `bbsMsg ${ok ? "ok" : "err"}`; }
   }
 
-  // ── Purchase pipeline log ─────────────────────────────────────────────────
-  // Always visible (not gated by ?diag). Every step is timestamped and persisted
-  // to sessionStorage so it survives the wallet deep-link round-trip and a Safari
-  // reload — the player (and support) can see exactly where a payment stalled.
-  private static readonly LOG_KEY = "super-novus:bbs:log";
+  // Internal step trace — kept for diagnostics but NOT shown to players. The visible
+  // "purchase log" panel was removed; these are no-ops so the many call sites (and
+  // the WalletManager onLog hook) keep working without cluttering the store UI.
   private logLines: string[] = [];
-  private scrolledToLog = false;
-
-  private clock(): string {
-    const d = new Date();
-    const p = (n: number) => String(n).padStart(2, "0");
-    return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
-  }
-
-  private logStep(msg: string): void {
-    this.logLines.push(`${this.clock()}  ${msg}`);
-    try { sessionStorage.setItem(BigBangStore.LOG_KEY, JSON.stringify(this.logLines)); } catch { /* ignore */ }
-    this.renderLog(this.logLines);
-    // Bring the log into view once per attempt so the player sees the live pipeline
-    // (and the outcome) without hunting below the pack cards.
-    if (!this.scrolledToLog) {
-      this.scrolledToLog = true;
-      try { this.el.querySelector("#bbsLogWrap")?.scrollIntoView({ block: "center", behavior: "smooth" }); } catch { /* ignore */ }
-    }
-  }
-
-  private renderLog(lines: string[]): void {
-    const wrap = this.el.querySelector("#bbsLogWrap") as HTMLElement | null;
-    const pre = this.el.querySelector("#bbsLog") as HTMLElement | null;
-    if (!wrap || !pre) return;
-    wrap.style.display = lines.length ? "block" : "none";
-    pre.textContent = lines.join("\n");
-    pre.scrollTop = pre.scrollHeight;
-  }
-
-  private loadLog(): string[] {
-    try {
-      const raw = sessionStorage.getItem(BigBangStore.LOG_KEY);
-      const arr = raw ? JSON.parse(raw) : null;
-      if (Array.isArray(arr)) { this.logLines = arr.slice(-60); return this.logLines; }
-    } catch { /* ignore */ }
-    return [];
-  }
-
-  private resetLog(): void {
-    this.logLines = [];
-    this.scrolledToLog = false;
-    try { sessionStorage.removeItem(BigBangStore.LOG_KEY); } catch { /* ignore */ }
-  }
+  private logStep(_msg: string): void { /* no visible log */ }
+  private renderLog(_lines: string[]): void { /* no-op */ }
+  private resetLog(): void { this.logLines = []; }
 
   private async buy(packId: BigBangPack["id"]): Promise<void> {
     if (this.busy) return;
@@ -224,11 +174,8 @@ export class BigBangStore {
       if (txHash && !isTxUsed(txHash)) {
         markTxUsed(txHash);
         this.credits.addPack(pack, txHash, Date.now());
-        this.logStep(`✓ purchase credited: +${pack.credits} Big Bangs`);
         this.onChange();
-        const keep = this.logLines.slice();   // render() rebuilds the DOM — re-show the log
         this.render();
-        this.renderLog(keep);
         this.msg(t("store.purchased", { n: pack.credits }), true);
         return;
       }
@@ -281,9 +228,7 @@ export class BigBangStore {
       this.logStep(`· found ${found.length} payment(s) to the game`);
       const credited = this.creditFound(found);
       this.onChange();
-      const keep = this.logLines.slice();
       this.render();
-      this.renderLog(keep);
       if (credited > 0) { this.msg(t("store.recovered", { n: credited }), true); return; }
       // Auto-scan reached nothing to credit — offer the always-works hash recovery.
       this.logStep("· nothing to credit in the scan window — offering hash recovery");
@@ -490,11 +435,8 @@ export class BigBangStore {
       if (res.ok) {
         markTxUsed(hash);
         this.credits.addPack(pack, hash, Date.now());
-        this.logStep(`✓ purchase credited: +${pack.credits} Big Bangs`);
         this.onChange();
-        const keep = this.logLines.slice();
         this.render();
-        this.renderLog(keep);
         this.msg(t("store.purchased", { n: pack.credits }), true);
         return;
       }
@@ -624,11 +566,6 @@ export class BigBangStore {
     .bbsConfirmBtn:active{transform:scale(.98)}
     @keyframes bbsPulse{0%,100%{box-shadow:0 10px 26px rgba(70,55,200,.5), inset 0 1px 0 rgba(255,255,255,.18)}
       50%{box-shadow:0 10px 34px rgba(120,100,255,.85), inset 0 1px 0 rgba(255,255,255,.25)}}
-    .bbsLogWrap{margin-top:14px;border-radius:12px;overflow:hidden;border:1px solid rgba(120,140,220,.25);background:rgba(6,10,26,.7)}
-    .bbsLogHead{font-size:9.5px;font-weight:800;letter-spacing:1.5px;text-transform:uppercase;color:#8ea2d8;
-      padding:8px 12px;background:rgba(20,28,60,.55);border-bottom:1px solid rgba(120,140,220,.18)}
-    .bbsLog{margin:0;padding:10px 12px;color:#9fe6c8;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
-      font-size:9.5px;line-height:1.55;white-space:pre-wrap;word-break:break-word;text-align:left;max-height:190px;overflow-y:auto}
     @media (prefers-reduced-motion: reduce){.bbsOverlay,.bbsSheet{animation:none}}
     `;
     document.head.appendChild(s);
