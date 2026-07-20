@@ -185,12 +185,12 @@ export class BigBangStore {
       // re-pair can't fix it — so the reliable in-app-browser path is shown first,
       // with a small secondary "reconnect" option for wallets that CAN grant Cronos
       // on a fresh pairing.
-      // The wallet won't route Cronos over WalletConnect (proven for several mobile
-      // wallets, incl. Crypto.com Onchain, which grant only eip155:1). Don't loop
-      // the player through dead ends — go straight to the guaranteed method: pay CRO
-      // directly and verify on-chain. A small "other options" link still offers the
-      // in-app-browser / reconnect routes.
-      if (prep === "reconnect") { this.showManualPay(pack); return; }
+      // The wallet won't route Cronos over WalletConnect (proven for Crypto.com
+      // Onchain, which grants only eip155:1). The chosen path is a NATIVE one-tap
+      // payment inside the wallet's own dApp browser — guide the player there.
+      // (When the game already runs in that browser, hasInjected() is true and we
+      // never reach here — the payment is native.)
+      if (prep === "reconnect") { this.showBrowserHint(pack); return; }
       if (prep === "switch") { this.showSwitch(pack); return; }
 
       // 3) Pay — payCRO logs session-readiness, payload, request, and response.
@@ -282,23 +282,25 @@ export class BigBangStore {
     m.className = "bbsMsg";
     m.innerHTML = `
       <div class="bbsSwitch">
-        <div class="bbsSwitchTitle">⚠ ${t("store.noCronosTitle")}</div>
-        <div class="bbsSwitchManual">${t("store.noCronosMsg")}</div>
-        ${pack ? `<button class="bbsSwitchBtn" id="bbsPayDirect">${t("store.payDirect")}</button>` : ""}
+        <div class="bbsSwitchTitle">⚡ ${t("store.browserTitle")}</div>
+        <div class="bbsSwitchManual">${t("store.browserMsg")}</div>
+        <button class="bbsConfirmBtn" id="bbsCopyLink">${t("store.copyLink")}</button>
+        <div class="bbsPayAddr" style="color:#cdd6f5">${link.replace(/^https?:\/\//, "")}</div>
+        <div class="bbsBrowserSteps">${t("store.browserSteps")}</div>
         <div class="bbsPayOr">${t("store.payOr")}</div>
-        <button class="bbsReconnectLink" id="bbsCopyLink">${t("store.copyLink")}</button>
-        <div class="bbsSwitchManual" style="opacity:.7">${link.replace(/^https?:\/\//, "")}</div>
+        ${pack ? `<button class="bbsReconnectLink" id="bbsPayDirect">${t("store.payManualLink")}</button>` : ""}
         ${pack ? `<button class="bbsReconnectLink" id="bbsReconnectBtn">${t("store.reconnectBtn")}</button>` : ""}
       </div>`;
-    const pay = m.querySelector("#bbsPayDirect") as HTMLButtonElement | null;
-    if (pay && pack) pay.addEventListener("click", () => this.showManualPay(pack));
     const copy = m.querySelector("#bbsCopyLink") as HTMLButtonElement;
     copy.addEventListener("click", async () => {
       try { await navigator.clipboard.writeText(link); copy.textContent = t("store.copied"); }
       catch { copy.textContent = link.replace(/^https?:\/\//, ""); }  // clipboard blocked → reveal for manual copy
     });
+    const pay = m.querySelector("#bbsPayDirect") as HTMLButtonElement | null;
+    if (pay && pack) pay.addEventListener("click", () => this.showManualPay(pack));
     const re = m.querySelector("#bbsReconnectBtn") as HTMLButtonElement | null;
     if (re && pack) re.addEventListener("click", () => this.attemptReconnect(pack, re));
+    try { m.scrollIntoView({ block: "center", behavior: "smooth" }); } catch { /* ignore */ }
   }
 
   /** Wallet-agnostic payment: the player sends CRO to the treasury from ANY wallet
@@ -459,6 +461,8 @@ export class BigBangStore {
       color:#9db0e6;text-decoration:underline;cursor:pointer;padding:4px}
     .bbsReconnectLink:disabled{opacity:.6;cursor:default}
     .bbsPayOr{font-size:9.5px;font-weight:700;letter-spacing:1px;text-transform:uppercase;color:#7c86ad;margin:4px 0}
+    .bbsBrowserSteps{font-size:10.5px;font-weight:500;line-height:1.6;color:#c4cbe8;text-align:left;max-width:320px;
+      background:rgba(6,10,26,.5);border:1px solid rgba(120,140,220,.2);border-radius:10px;padding:10px 12px;white-space:pre-line}
     .bbsPay{display:flex;flex-direction:column;align-items:center;gap:10px;margin-top:14px;padding:18px 16px;
       border-radius:16px;background:radial-gradient(120% 100% at 50% 0%, rgba(120,90,255,.22), transparent 65%),rgba(30,26,64,.55);
       border:1px solid rgba(150,170,255,.4)}
