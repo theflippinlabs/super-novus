@@ -5,7 +5,7 @@
    are instant with no wallet. Fails soft with a precise, localized reason. */
 import { WalletManager, PayError } from "../net/WalletManager";
 import { BigBangCredits } from "../net/BigBangCredits";
-import { verifyPayment, watchForPayment, findRecentPayments, isTxUsed, markTxUsed } from "../net/CronosPay";
+import { verifyPayment, watchForPayment, findRecentPayments, readPayment, isTxUsed, markTxUsed } from "../net/CronosPay";
 import { BIG_BANG_PACKS, BIG_BANG_RECIPIENT, type BigBangPack } from "../config";
 import { i18n, t } from "../i18n";
 
@@ -275,23 +275,19 @@ export class BigBangStore {
       const addr = this.wallet.getAddress();
       if (!addr) { this.msg(t("bigbang.errNoWallet")); return; }
       this.logStep(`▶ recover: scanning Cronos for payments from ${addr.slice(0, 6)}…${addr.slice(-4)}`);
-      const found = await findRecentPayments(addr, BIG_BANG_RECIPIENT);
+      this.msg(t("store.recovering"), true);
+      const found = await findRecentPayments(addr, BIG_BANG_RECIPIENT, 256,
+        (d, tot) => { if (d % 60 === 0 || d >= tot) this.logStep(`· scanned ${d}/${tot} blocks`); });
       this.logStep(`· found ${found.length} payment(s) to the game`);
-      let credited = 0;
-      for (const f of found) {
-        if (isTxUsed(f.hash)) { this.logStep(`· ${f.hash.slice(0, 10)}… already credited`); continue; }
-        const pack = BIG_BANG_PACKS.find((p) => Math.abs(p.priceCRO - f.cro) <= Math.max(1, p.priceCRO * 0.01));
-        if (!pack) { this.logStep(`· ${f.cro} CRO — no matching pack`); continue; }
-        markTxUsed(f.hash);
-        this.credits.addPack(pack, f.hash, Date.now());
-        credited += pack.credits;
-        this.logStep(`✓ credited +${pack.credits} (${pack.priceCRO} CRO · ${f.hash.slice(0, 10)}…)`);
-      }
+      const credited = this.creditFound(found);
       this.onChange();
       const keep = this.logLines.slice();
       this.render();
       this.renderLog(keep);
-      this.msg(credited > 0 ? t("store.recovered", { n: credited }) : t("store.recoverNone"), credited > 0);
+      if (credited > 0) { this.msg(t("store.recovered", { n: credited }), true); return; }
+      // Auto-scan reached nothing to credit — offer the always-works hash recovery.
+      this.logStep("· nothing to credit in the scan window — offering hash recovery");
+      this.showRecoverByHash();
     } catch (e) {
       this.logStep(`✗ recover: ${(e instanceof Error ? e.message : String(e)).slice(0, 100)}`);
       this.msg(t("store.recoverNone"));
@@ -300,6 +296,69 @@ export class BigBangStore {
       this.wallet.onLog = null;
       this.busy = false;
     }
+  }
+
+  /** Credit every found payment that matches a pack by amount and isn't already
+      credited (deduped by tx hash). Returns total Big Bangs credited. */
+  private creditFound(found: { hash: string; cro: number }[]): number {
+    let credited = 0;
+    for (const f of found) {
+      if (isTxUsed(f.hash)) { this.logStep(`· ${f.hash.slice(0, 10)}… already credited`); continue; }
+      const pack = BIG_BANG_PACKS.find((p) => Math.abs(p.priceCRO - f.cro) <= Math.max(1, p.priceCRO * 0.01));
+      if (!pack) { this.logStep(`· ${f.cro} CRO — no matching pack`); continue; }
+      markTxUsed(f.hash);
+      this.credits.addPack(pack, f.hash, Date.now());
+      credited += pack.credits;
+      this.logStep(`✓ credited +${pack.credits} (${pack.priceCRO} CRO · ${f.hash.slice(0, 10)}…)`);
+    }
+    return credited;
+  }
+
+  /** Hash-based recovery — the always-works fallback: the player pastes the tx
+      hash of the payment they made, we read it on-chain, match the amount to a
+      pack, and credit. Works for any payment regardless of how long ago it was. */
+  private showRecoverByHash(): void {
+    this.busy = false;
+    const m = this.el.querySelector("#bbsMsg") as HTMLElement | null;
+    if (!m) return;
+    m.className = "bbsMsg";
+    m.innerHTML = `
+      <div class="bbsPay">
+        <div class="bbsSwitchTitle">${t("store.recoverHashTitle")}</div>
+        <div class="bbsPaySub">${t("store.recoverHashMsg")}</div>
+        <input class="bbsPayInput" id="bbsRecHash" inputmode="text" autocomplete="off"
+               autocapitalize="off" spellcheck="false" placeholder="${t("store.payHashPlaceholder")}" />
+        <button class="bbsConfirmBtn" id="bbsRecVerify">${t("store.payVerify")}</button>
+        <div class="bbsPayMsg" id="bbsRecMsg"></div>
+      </div>`;
+    try { m.scrollIntoView({ block: "center", behavior: "smooth" }); } catch { /* ignore */ }
+    const input = m.querySelector("#bbsRecHash") as HTMLInputElement;
+    const verify = m.querySelector("#bbsRecVerify") as HTMLButtonElement;
+    const rmsg = m.querySelector("#bbsRecMsg") as HTMLElement;
+    const setMsg = (txt: string, ok = false) => { rmsg.textContent = txt; rmsg.className = `bbsPayMsg ${ok ? "ok" : "err"}`; };
+    verify.addEventListener("click", async () => {
+      const hash = input.value.trim();
+      if (isTxUsed(hash)) { setMsg(t("store.payErrUsed")); return; }
+      verify.disabled = true; verify.textContent = t("store.payVerifying");
+      const res = await readPayment(hash, BIG_BANG_RECIPIENT);
+      verify.disabled = false; verify.textContent = t("store.payVerify");
+      if (!res.ok) {
+        const key = ({
+          format: "store.payErrFormat", "not-found": "store.payErrNotFound", pending: "store.payErrPending",
+          failed: "store.payErrFailed", "wrong-recipient": "store.payErrRecipient", "wrong-chain": "store.payErrChain",
+          underpaid: "store.payErrUnderpaid", network: "store.payErrNetwork",
+        } as const)[res.reason];
+        setMsg(t(key, { n: "" }));
+        return;
+      }
+      const pack = BIG_BANG_PACKS.find((p) => Math.abs(p.priceCRO - res.cro) <= Math.max(1, p.priceCRO * 0.01));
+      if (!pack) { setMsg(t("store.recoverNoPack", { n: this.cro(Math.round(res.cro)) })); return; }
+      markTxUsed(hash);
+      this.credits.addPack(pack, hash, Date.now());
+      this.onChange();
+      this.render();
+      this.msg(t("store.recovered", { n: pack.credits }), true);
+    });
   }
 
   /** The transaction has been published but iOS WalletConnect won't foreground the

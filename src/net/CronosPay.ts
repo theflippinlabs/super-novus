@@ -130,29 +130,66 @@ export async function watchForPayment(
 }
 
 /** Scan the last `lookback` blocks for already-made native payments from `from`
-    to `recipient`. Used to RECOVER a payment whose credit was lost. Returns each
-    match as { hash, cro } (newest first). */
+    to `recipient`. Used to RECOVER a payment whose credit was lost. Blocks are
+    fetched in parallel batches so a wide window (default ~256 blocks ≈ 25 min on
+    Cronos) stays fast. Returns each match as { hash, cro }, newest first. */
 export async function findRecentPayments(
   from: string,
   recipient: string = BIG_BANG_RECIPIENT,
-  lookback = 60,
+  lookback = 256,
+  onProgress?: (done: number, total: number) => void,
 ): Promise<{ hash: string; cro: number }[]> {
   const fromL = from.toLowerCase();
   const toL = recipient.toLowerCase();
   let head: number;
   try { head = hexToNum(await rpc("eth_blockNumber", [])); } catch { return []; }
+  const blocks: number[] = [];
+  for (let n = head; n > head - lookback && n >= 0; n--) blocks.push(n);
   const out: { hash: string; cro: number }[] = [];
-  for (let n = head; n > head - lookback && n >= 0; n--) {
-    let blk: { transactions?: RawTx[] } | null;
-    try { blk = (await rpc("eth_getBlockByNumber", ["0x" + n.toString(16), true])) as typeof blk; } catch { continue; }
-    for (const tx of blk?.transactions ?? []) {
-      if ((tx.from || "").toLowerCase() !== fromL || (tx.to || "").toLowerCase() !== toL) continue;
-      let v: bigint;
-      try { v = BigInt(tx.value ?? "0x0"); } catch { continue; }
-      if (v > 0n && tx.hash) out.push({ hash: tx.hash, cro: Number(v / 10n ** 15n) / 1000 });
+  const BATCH = 6;
+  for (let i = 0; i < blocks.length; i += BATCH) {
+    const slice = blocks.slice(i, i + BATCH);
+    const results = await Promise.all(slice.map(async (n) => {
+      try { return (await rpc("eth_getBlockByNumber", ["0x" + n.toString(16), true])) as { transactions?: RawTx[] } | null; }
+      catch { return null; }
+    }));
+    for (const blk of results) {
+      for (const tx of blk?.transactions ?? []) {
+        if ((tx.from || "").toLowerCase() !== fromL || (tx.to || "").toLowerCase() !== toL) continue;
+        let v: bigint;
+        try { v = BigInt(tx.value ?? "0x0"); } catch { continue; }
+        if (v > 0n && tx.hash) out.push({ hash: tx.hash, cro: Number(v / 10n ** 15n) / 1000 });
+      }
     }
+    onProgress?.(Math.min(i + BATCH, blocks.length), blocks.length);
   }
   return out;
+}
+
+/** Confirm a tx hash is a successful Cronos payment to `recipient` and return the
+    CRO amount (so the caller can match it to a pack). Used for hash-based recovery
+    when the auto-scan window doesn't reach the payment. */
+export async function readPayment(
+  txHash: string,
+  recipient: string = BIG_BANG_RECIPIENT,
+): Promise<{ ok: true; cro: number; from: string } | { ok: false; reason: VerifyReason }> {
+  const hash = txHash.trim();
+  if (!/^0x[0-9a-fA-F]{64}$/.test(hash)) return { ok: false, reason: "format" };
+  let tx: RpcTx;
+  let receipt: RpcReceipt;
+  try {
+    tx = (await rpc("eth_getTransactionByHash", [hash])) as RpcTx;
+    receipt = (await rpc("eth_getTransactionReceipt", [hash])) as RpcReceipt;
+  } catch (e) {
+    return { ok: false, reason: "network" };
+  }
+  if (!tx) return { ok: false, reason: "not-found" };
+  if (!receipt || receipt.blockNumber == null) return { ok: false, reason: "pending" };
+  if (receipt.status != null && receipt.status !== "0x1") return { ok: false, reason: "failed" };
+  if ((tx.to || "").toLowerCase() !== recipient.toLowerCase()) return { ok: false, reason: "wrong-recipient" };
+  let v: bigint;
+  try { v = BigInt(tx.value ?? "0x0"); } catch { v = 0n; }
+  return { ok: true, cro: Number(v / 10n ** 15n) / 1000, from: (tx.from || "").toLowerCase() };
 }
 
 // --- Replay guard: a given tx hash can credit exactly one purchase on this device.
