@@ -179,7 +179,7 @@ export class GameEngine {
     // best local (offline-first) affiché dès le menu
     this.best = this.leaderboard.getLocalBest().score;
     const addr = await this.wallet.tryReconnect();  // silent injected/WC reconnect
-    if (addr){ refresh(); this._refreshIdentity(); }
+    if (addr){ refresh(); this._refreshIdentity(); void this._syncGrants(); }
   }
 
   /* ---------- controls, language, profile ---------- */
@@ -233,10 +233,21 @@ export class GameEngine {
   /** After an explicit connect: show identity, and prompt for a nickname if none. */
   async _afterConnect(){
     await this._refreshIdentity();
+    void this._syncGrants();          // pull any free Big Bangs gifted to this wallet
     const addr = this.wallet.getAddress();
     if (!addr || !this.profile.available) return;
     const row = await this.profile.get();
     if (!row || !row.nickname) this.profilePanel.openNicknameSetup();
+  }
+
+  /** Pull owner-gifted Big Bang credits for the connected wallet and refresh the
+      balance display. Silent/non-blocking; runs on connect and on silent boot
+      reconnect. */
+  async _syncGrants(){
+    try {
+      const added = await this.credits.syncGrants(Date.now());
+      if (added > 0){ this._onCreditsChanged(); if (this.profilePanel.isOpen()) this.profilePanel.refresh(); }
+    } catch { /* offline — will sync next connect */ }
   }
 
   _bindInput(){

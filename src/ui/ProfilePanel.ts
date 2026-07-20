@@ -267,10 +267,10 @@ export class ProfilePanel {
           <div class="pfHistRow">
             <span class="pfHistIc">${h.emoji}</span>
             <span class="pfHistMid">
-              <span class="pfHistName">${esc(t(`store.pack.${h.packId}`))}</span>
+              <span class="pfHistName">${esc(h.packId === "gift" ? t("profile.giftCredit") : t(`store.pack.${h.packId}`))}</span>
               <span class="pfHistSub">${this.date(new Date(h.ts).toISOString())} · +${h.credits} 💥</span>
             </span>
-            <span class="pfHistCro">${this.num(h.cro)} CRO</span>
+            <span class="pfHistCro">${h.packId === "gift" ? "🎁" : this.num(h.cro) + " CRO"}</span>
           </div>`).join("")
       : `<div class="pfMuted pfPad">${t("history.empty")}</div>`;
     this.el.innerHTML = `

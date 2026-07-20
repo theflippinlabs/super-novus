@@ -67,6 +67,26 @@ export class Payouts {
     return (data ?? []) as Payout[];
   }
 
+  /** Gift free Big Bang credits to a wallet (promo / ops). Owner-only, guarded by
+      the admin secret (the endpoint is public). Returns the new grant id. */
+  async grantBigBang(wallet: string, credits: number, note: string, secret: string): Promise<number> {
+    if (!this.client) throw new Error("Supabase non configuré");
+    const { data, error } = await this.client.functions.invoke("grant-bigbang", {
+      body: { wallet, credits, note, secret },
+    });
+    if (error) {
+      let detail = ""; try { detail = await (error as any).context?.text?.(); } catch { /* ignore */ }
+      const status = (error as any).context?.status as number | undefined;
+      const msg = status === 401 ? "Code admin incorrect"
+        : status === 503 ? "ADMIN_SECRET non configuré côté serveur"
+        : status === 400 ? `Données invalides : ${detail || "wallet/crédits"}`
+        : `Échec (${status ?? "?"}) : ${detail || error.message}`;
+      throw new Error(msg);
+    }
+    if (!(data as any)?.ok) throw new Error("Réponse serveur invalide");
+    return Number((data as any).id);
+  }
+
   /** Most recent payouts of ANY status (for the "recent winners" admin section). */
   async listRecent(limit = 8): Promise<Payout[]> {
     if (!this.client) return [];
