@@ -66,6 +66,16 @@ export class Payouts {
     return (data ?? []) as Payout[];
   }
 
+  /** Most recent payouts of ANY status (for the "recent winners" admin section). */
+  async listRecent(limit = 8): Promise<Payout[]> {
+    if (!this.client) return [];
+    const { data, error } = await this.client
+      .from("sn_payouts").select("*")
+      .order("period_start", { ascending: false }).limit(limit);
+    if (error) { console.error("[Payouts] recent read failed:", error.message, error); return []; }
+    return (data ?? []) as Payout[];
+  }
+
   /** Send the prize from the connected treasury wallet, then record the tx. */
   async pay(p: Payout, amountCRO: number): Promise<string> {
     if (!this.isTreasury()) throw new Error("Connecte le wallet trésorerie");
