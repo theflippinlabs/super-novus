@@ -87,6 +87,24 @@ export class Payouts {
     return Number((data as any).id);
   }
 
+  /** Disqualify a wallet: remove its leaderboard entries + pending payout. Owner-
+      only, guarded by the admin secret. Returns how many rows were removed. */
+  async removePlayer(wallet: string, secret: string): Promise<number> {
+    if (!this.client) throw new Error("Supabase non configuré");
+    const { data, error } = await this.client.functions.invoke("admin-remove-score", {
+      body: { wallet, secret },
+    });
+    if (error) {
+      let detail = ""; try { detail = await (error as any).context?.text?.(); } catch { /* ignore */ }
+      const status = (error as any).context?.status as number | undefined;
+      throw new Error(status === 401 ? "Code admin incorrect"
+        : status === 503 ? "ADMIN_SECRET non configuré côté serveur"
+        : `Échec (${status ?? "?"}) : ${detail || error.message}`);
+    }
+    if (!(data as any)?.ok) throw new Error("Réponse serveur invalide");
+    return Number((data as any).removed) || 0;
+  }
+
   /** Most recent payouts of ANY status (for the "recent winners" admin section). */
   async listRecent(limit = 8): Promise<Payout[]> {
     if (!this.client) return [];
