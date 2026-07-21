@@ -25,3 +25,6 @@ verify_jwt = false
 
 [functions.admin-remove-score]
 verify_jwt = false
+
+[functions.set-profile]
+verify_jwt = false
