@@ -179,7 +179,8 @@ export class GameEngine {
     // best local (offline-first) affiché dès le menu
     this.best = this.leaderboard.getLocalBest().score;
     const addr = await this.wallet.tryReconnect();  // silent injected/WC reconnect
-    if (addr){ refresh(); this._refreshIdentity(); void this._syncGrants(); }
+    if (addr){ refresh(); this._refreshIdentity(); void this._syncGrants();
+      this.profile.syncSelf().then(() => this._refreshIdentity()); }
   }
 
   /* ---------- controls, language, profile ---------- */
@@ -232,6 +233,7 @@ export class GameEngine {
       avatar), or null when playing as guest. Never exposes the address. */
   /** After an explicit connect: show identity, and prompt for a nickname if none. */
   async _afterConnect(){
+    await this.profile.syncSelf();    // pull the shared nickname/avatar (cross-device)
     await this._refreshIdentity();
     void this._syncGrants();          // pull any free Big Bangs gifted to this wallet
     const addr = this.wallet.getAddress();

@@ -4,6 +4,8 @@
    mirror what a future Supabase-backed version will expose, so swapping the
    storage layer later won't touch the UI. History and rewards are out of scope
    for now. */
+import { createClient, type SupabaseClient } from "@supabase/supabase-js";
+import { SUPABASE_URL_DEFAULT, SUPABASE_ANON_KEY_DEFAULT } from "../config";
 import { WalletManager } from "./WalletManager";
 
 const PROFILE_PREFIX = "super-novus:profile:";
@@ -24,10 +26,31 @@ interface StoredStats { high_score: number; total_dist: number; total_dust: numb
 const EMPTY_STATS: StoredStats = { high_score: 0, total_dist: 0, total_dust: 0, games: 0, deaths: 0, big_bangs: 0 };
 
 export class Profile {
-  constructor(private wallet: WalletManager) {}
+  private client: SupabaseClient | null = null;
+
+  constructor(private wallet: WalletManager) {
+    const url = (import.meta.env.VITE_SUPABASE_URL as string | undefined) || SUPABASE_URL_DEFAULT;
+    const key = (import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined) || SUPABASE_ANON_KEY_DEFAULT;
+    if (url && key) this.client = createClient(url, key, { auth: { persistSession: false, autoRefreshToken: false } });
+  }
 
   /** Local storage is always available (guest-safe). */
   get available(): boolean { return true; }
+
+  /** Pull this wallet's SHARED profile (nickname/avatar) from the server into the
+      local cache, so a pseudo set on another device shows up here too. Non-blocking. */
+  async syncSelf(): Promise<void> {
+    const addr = this.wallet.getAddress();
+    if (!this.client || !addr) return;
+    try {
+      const { data } = await this.client.from("sn_profiles").select("nickname,avatar_url").eq("wallet", addr.toLowerCase()).maybeSingle();
+      if (!data) return;
+      const p = this.readProfile(addr);
+      if (data.nickname != null) p.nickname = data.nickname;
+      if (data.avatar_url != null) p.avatar = data.avatar_url;
+      this.writeProfile(addr, p);
+    } catch { /* offline — keep local */ }
+  }
 
   /* ---------- identity (local) ---------- */
   cachedIdentity(wallet: string): { nickname: string | null; avatar: string | null } {
@@ -55,10 +78,31 @@ export class Profile {
     };
   }
 
-  /** Save nickname and/or avatar locally (avatarUrl null resets to generated). */
+  /** Save nickname and/or avatar. Pushes to the SHARED server profile (so it
+      shows the same everywhere) AND caches locally for instant reads. The server
+      enforces nickname uniqueness; a clash returns { ok:false, error:"nick-taken" }
+      and nothing is changed. Offline, it still saves locally. */
   async save(opts: { nickname?: string; avatarUrl?: string | null }): Promise<SaveResult> {
     const addr = this.wallet.getAddress();
     if (!addr) return { ok: false, error: "no-wallet" };
+
+    if (this.client) {
+      const body: Record<string, unknown> = { wallet: addr };
+      if (opts.nickname !== undefined) body.nickname = opts.nickname;
+      if (opts.avatarUrl !== undefined) body.avatar_url = opts.avatarUrl;
+      try {
+        const { error } = await this.client.functions.invoke("set-profile", { body });
+        if (error) {
+          let detail = ""; try { detail = await (error as any).context?.text?.(); } catch { /* ignore */ }
+          const status = (error as any).context?.status as number | undefined;
+          if (status === 409 || /nick-taken/.test(detail)) return { ok: false, error: "nick-taken" };
+          if (status === 400 && /nickname/.test(detail)) return { ok: false, error: "bad-nickname" };
+          // Other server error → fall through to a local save (offline-friendly).
+          console.warn(`[Profile] server save failed (${status ?? "?"}), saving locally: ${detail || error.message}`);
+        }
+      } catch (e) { console.warn("[Profile] server save network error — local only:", e); }
+    }
+
     const p = this.readProfile(addr);
     if (opts.nickname !== undefined) p.nickname = opts.nickname;
     if (opts.avatarUrl !== undefined) p.avatar = opts.avatarUrl;

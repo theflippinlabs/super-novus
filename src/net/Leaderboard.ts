@@ -176,18 +176,35 @@ export class Leaderboard {
       return [];
     }
     this.lastError = null;
-    // Nickname/avatar per row come from the (future) profiles table — null for
-    // now, so the board renders a generated avatar + short address. Frontend-only.
-    return (data ?? []).map((x) => ({
-      pseudo: shortAddr(x.wallet),
-      wallet: x.wallet,
-      score: x.best_score,
-      dist: x.best_dist,
-      dust: x.best_dust,
-      bigBangs: x.big_bangs ?? 0,
-      nickname: null as string | null,
-      avatar: null as string | null,
-    }));
+    const rows = data ?? [];
+    // Nickname/avatar come from the SHARED profiles table so a player's chosen
+    // pseudo shows the same for everyone. One batched read for all the wallets.
+    const profs = await this.fetchProfiles(rows.map((x) => x.wallet));
+    return rows.map((x) => {
+      const pr = profs.get(x.wallet.toLowerCase());
+      return {
+        pseudo: shortAddr(x.wallet),
+        wallet: x.wallet,
+        score: x.best_score,
+        dist: x.best_dist,
+        dust: x.best_dust,
+        bigBangs: x.big_bangs ?? 0,
+        nickname: (pr?.nickname ?? null) as string | null,
+        avatar: (pr?.avatar_url ?? null) as string | null,
+      };
+    });
+  }
+
+  /** Batch-read shared profiles (nickname/avatar) for a set of wallets. */
+  async fetchProfiles(wallets: string[]): Promise<Map<string, { nickname: string | null; avatar_url: string | null }>> {
+    const map = new Map<string, { nickname: string | null; avatar_url: string | null }>();
+    if (!this.client || !wallets.length) return map;
+    const lower = [...new Set(wallets.map((w) => w.toLowerCase()))];
+    const { data, error } = await this.client
+      .from("sn_profiles").select("wallet,nickname,avatar_url").in("wallet", lower);
+    if (error) { console.warn(`${LOG} profile fetch failed:`, error.message); return map; }
+    for (const p of data ?? []) map.set(String(p.wallet).toLowerCase(), { nickname: p.nickname ?? null, avatar_url: p.avatar_url ?? null });
+    return map;
   }
 
   /** Signed submission through the Edge Function. Returns true if stored.
