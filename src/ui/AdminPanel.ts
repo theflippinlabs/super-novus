@@ -160,13 +160,13 @@ export class AdminPanel {
           <div class="admPName">${escapeHtml(generateNickname(p.wallet))}</div>
           <div class="admPSub">${shortAddr(p.wallet)} · ${this.fr(p.score)} pts · ${this.fr(p.dist)} m · ${this.fr(p.dust)} ✨</div>
         </div>
-        <button class="admPGift" title="Offrir 3 Big Bangs">🎁</button>
+        <button class="admPGift" title="Offrir des Big Bangs (tu choisis le nombre)">🎁</button>
         <button class="admPBan" title="Disqualifier (retirer du classement)">🚫</button>
       </div>`).join("");
     return `
       <div class="admSection">
         <div class="admSecH">Joueurs <span class="admCount">${players.length}</span></div>
-        <div class="admMuted" style="margin:-4px 0 10px">🎁 offrir des Big Bangs · 🚫 disqualifier un tricheur (retire son score)</div>
+        <div class="admMuted" style="margin:-4px 0 10px">🎁 offrir des Big Bangs (tu choisis le nombre) · 🚫 disqualifier un tricheur (retire son score)</div>
         <div class="admPlayers">${rows}</div>
       </div>`;
   }
@@ -179,10 +179,12 @@ export class AdminPanel {
       const ban = row.querySelector(".admPBan") as HTMLButtonElement | null;
 
       gift?.addEventListener("click", async () => {
+        const n = Math.floor(Number(prompt(`Combien de Big Bangs offrir à ${name} ? (1 à 90)`, "3")));
+        if (!(n >= 1 && n <= 90)) return;   // cancelled or invalid
         const secret = this.askSecret(); if (!secret) return;
         gift.disabled = true; const prev = gift.textContent; gift.textContent = "…";
         try {
-          await this.payouts.grantBigBang(wallet, 3, "admin gift", secret);
+          await this.payouts.grantBigBang(wallet, n, "admin gift", secret);
           this.grantSecret = secret;
           gift.textContent = "✓";
           setTimeout(() => { gift.textContent = prev; gift.disabled = false; }, 1400);
