@@ -155,7 +155,7 @@ export class AdminPanel {
     }
     const rows = players.map((p) => `
       <div class="admPlayer" data-w="${p.wallet.replace(/[^0-9a-fA-Fx]/g, "")}">
-        <img class="admPAv" src="${generateAvatar(p.wallet, 64)}" alt="">
+        <img class="admPAv" src="${escapeHtml(generateAvatar(p.wallet, 64))}" alt="">
         <div class="admPInfo">
           <div class="admPName">${escapeHtml(generateNickname(p.wallet))}</div>
           <div class="admPSub">${shortAddr(p.wallet)} · ${this.fr(p.score)} pts · ${this.fr(p.dist)} m · ${this.fr(p.dust)} ✨</div>
