@@ -16,6 +16,8 @@ import { PrizePool, type PoolInfo } from "../net/PrizePool";
 import { Leaderboard, type BoardRow } from "../net/Leaderboard";
 import { Accounting, type AccountingSummary, type AcctTx } from "../net/Accounting";
 import { WalletManager, shortAddr } from "../net/WalletManager";
+import { generateNickname } from "./Identity";
+import { generateAvatar } from "./Avatar";
 import { TREASURY_ADDRESS, WEEKLY_PRIZE_USD, MONTHLY_PRIZE_USD } from "../config";
 
 export class AdminPanel {
@@ -114,9 +116,18 @@ export class AdminPanel {
       this.payouts.listRecent(6).catch(() => [] as Payout[]),
       this.leaderboard.count("weekly").catch(() => 0),
       this.leaderboard.count("monthly").catch(() => 0),
-      this.leaderboard.top("weekly", 5).catch(() => [] as BoardRow[]),
-      this.leaderboard.top("monthly", 5).catch(() => [] as BoardRow[]),
+      this.leaderboard.top("weekly", 50).catch(() => [] as BoardRow[]),
+      this.leaderboard.top("monthly", 50).catch(() => [] as BoardRow[]),
     ]);
+
+    // Merge weekly + monthly into a single per-wallet player list (best score kept).
+    const byWallet = new Map<string, BoardRow>();
+    for (const r of [...topW, ...topM]) {
+      const k = r.wallet.toLowerCase();
+      const ex = byWallet.get(k);
+      if (!ex || r.score > ex.score) byWallet.set(k, r);
+    }
+    const players = [...byWallet.values()].sort((a, b) => b.score - a.score);
 
     this.lastCsv = acct?.txs ?? [];
     const body = this.el.querySelector("#admBody");
@@ -126,12 +137,84 @@ export class AdminPanel {
       this.financeSection(acct) +
       this.grantSection() +
       this.pendingSection(pending) +
-      this.standingsSection(topW, topM) +
+      this.playersSection(players) +
+      this.standingsSection(topW.slice(0, 5), topM.slice(0, 5)) +
       this.recentSection(recent);
 
     this.bindPending(pending);
     this.bindFinance();
     this.bindGrant();
+    this.bindPlayers();
+  }
+
+  /* ----------------------------- players ----------------------------- */
+  private playersSection(players: BoardRow[]): string {
+    if (!players.length) {
+      return `<div class="admSection"><div class="admSecH">Joueurs</div>
+        <div class="admMuted admPad">Aucun joueur classé pour l'instant.</div></div>`;
+    }
+    const rows = players.map((p) => `
+      <div class="admPlayer" data-w="${p.wallet.replace(/[^0-9a-fA-Fx]/g, "")}">
+        <img class="admPAv" src="${escapeHtml(generateAvatar(p.wallet, 64))}" alt="">
+        <div class="admPInfo">
+          <div class="admPName">${escapeHtml(generateNickname(p.wallet))}</div>
+          <div class="admPSub">${shortAddr(p.wallet)} · ${this.fr(p.score)} pts · ${this.fr(p.dist)} m · ${this.fr(p.dust)} ✨</div>
+        </div>
+        <button class="admPGift" title="Offrir 3 Big Bangs">🎁</button>
+        <button class="admPBan" title="Disqualifier (retirer du classement)">🚫</button>
+      </div>`).join("");
+    return `
+      <div class="admSection">
+        <div class="admSecH">Joueurs <span class="admCount">${players.length}</span></div>
+        <div class="admMuted" style="margin:-4px 0 10px">🎁 offrir des Big Bangs · 🚫 disqualifier un tricheur (retire son score)</div>
+        <div class="admPlayers">${rows}</div>
+      </div>`;
+  }
+
+  private bindPlayers(): void {
+    for (const row of Array.from(this.el.querySelectorAll<HTMLElement>(".admPlayer"))) {
+      const wallet = row.dataset.w || "";
+      const name = row.querySelector(".admPName")?.textContent || shortAddr(wallet);
+      const gift = row.querySelector(".admPGift") as HTMLButtonElement | null;
+      const ban = row.querySelector(".admPBan") as HTMLButtonElement | null;
+
+      gift?.addEventListener("click", async () => {
+        const secret = this.askSecret(); if (!secret) return;
+        gift.disabled = true; const prev = gift.textContent; gift.textContent = "…";
+        try {
+          await this.payouts.grantBigBang(wallet, 3, "admin gift", secret);
+          this.grantSecret = secret;
+          gift.textContent = "✓";
+          setTimeout(() => { gift.textContent = prev; gift.disabled = false; }, 1400);
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (/incorrect/i.test(msg)) this.grantSecret = "";
+          alert("Échec : " + msg); gift.textContent = prev; gift.disabled = false;
+        }
+      });
+
+      ban?.addEventListener("click", async () => {
+        if (!confirm(`Disqualifier ${name} ?\nSon score sera retiré du classement (semaine + mois).`)) return;
+        const secret = this.askSecret(); if (!secret) return;
+        ban.disabled = true; ban.textContent = "…";
+        try {
+          await this.payouts.removePlayer(wallet, secret);
+          this.grantSecret = secret;
+          row.style.transition = "opacity .3s"; row.style.opacity = ".35";
+          ban.textContent = "✓";
+        } catch (e) {
+          const msg = e instanceof Error ? e.message : String(e);
+          if (/incorrect/i.test(msg)) this.grantSecret = "";
+          alert("Échec : " + msg); ban.textContent = "🚫"; ban.disabled = false;
+        }
+      });
+    }
+  }
+
+  /** The admin code, from memory or a one-time prompt (never persisted). */
+  private askSecret(): string {
+    if (!this.grantSecret) this.grantSecret = (prompt("Code admin (défini dans Supabase → ADMIN_SECRET) :") || "").trim();
+    return this.grantSecret;
   }
 
   /* ---------------------- distribute free Big Bangs ---------------------- */
@@ -163,8 +246,7 @@ export class AdminPanel {
       const status = this.el.querySelector("#admGStatus") as HTMLElement;
       if (!/^0x[0-9a-fA-F]{40}$/.test(w)) { status.className = "admStatus admStatusErr"; status.textContent = "Adresse wallet invalide (0x… 40 caractères)."; return; }
       if (!(credits >= 1 && credits <= 90)) { status.className = "admStatus admStatusErr"; status.textContent = "Nombre de Big Bangs : entre 1 et 90."; return; }
-      let secret = this.grantSecret;
-      if (!secret) { secret = (prompt("Code admin (défini dans Supabase → ADMIN_SECRET) :") || "").trim(); if (!secret) return; }
+      const secret = this.askSecret(); if (!secret) return;
       btn.disabled = true; status.className = "admStatus"; status.textContent = "Envoi…";
       try {
         await this.payouts.grantBigBang(w, credits, note, secret);
@@ -520,6 +602,18 @@ export class AdminPanel {
       .admGNum{width:88px;flex-shrink:0;font-weight:800;text-align:center}
       .admGUnit{font-size:12px;color:#c9b8ff;font-weight:700}
       .admGUnit em{font-style:normal;color:#8fa0d8;font-weight:400}
+      .admPlayers{display:flex;flex-direction:column;gap:8px}
+      .admPlayer{display:flex;align-items:center;gap:10px;padding:9px 11px;background:rgba(16,20,44,.55);
+        border:1px solid rgba(140,170,255,.14);border-radius:13px}
+      .admPAv{width:38px;height:38px;border-radius:11px;flex-shrink:0;object-fit:cover;background:#0a0e24;border:1px solid rgba(140,170,255,.25)}
+      .admPInfo{flex:1;min-width:0}
+      .admPName{font-size:13px;font-weight:800;color:#eaf0ff;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .admPSub{font-size:10.5px;color:#8fa0d8;font-variant-numeric:tabular-nums;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+      .admPGift,.admPBan{pointer-events:auto;cursor:pointer;flex-shrink:0;width:38px;height:38px;border-radius:11px;
+        font-size:17px;font-family:inherit;border:1px solid rgba(140,170,255,.22);background:rgba(24,30,60,.7)}
+      .admPGift{border-color:rgba(170,130,255,.4)}
+      .admPBan{border-color:rgba(224,112,138,.4)}
+      .admPGift:active,.admPBan:active{transform:scale(.92)}
       @media(prefers-reduced-motion:reduce){.admOverlay{backdrop-filter:none}}
     `;
     document.head.appendChild(s);

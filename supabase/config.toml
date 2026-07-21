@@ -22,3 +22,6 @@ verify_jwt = false
 
 [functions.grant-bigbang]
 verify_jwt = false
+
+[functions.admin-remove-score]
+verify_jwt = false

@@ -20,6 +20,9 @@
     "sirv-cli": "^3.0.1",
     "three": "0.128.0"
   },
+  "overrides": {
+    "axios": ">=1.18.1"
+  },
   "devDependencies": {
     "@types/three": "0.128.0",
     "typescript": "^5.4.0",
